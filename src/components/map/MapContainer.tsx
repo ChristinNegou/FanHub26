@@ -100,34 +100,38 @@ export function MapContainer({
       for (const bar of bars) {
         if (markersRef.current.has(bar.id)) continue;
 
-        const el = document.createElement('div');
         const featured = bar.is_featured;
-        el.style.cssText = `
-          width: ${featured ? 44 : 36}px;
-          height: ${featured ? 44 : 36}px;
+        const size = featured ? 44 : 36;
+
+        // el is the Mapbox anchor — never touch its transform
+        const el = document.createElement('div');
+        el.style.cssText = `width:${size}px;height:${size}px;cursor:pointer;`;
+
+        // inner receives the visual + hover scale
+        const inner = document.createElement('div');
+        inner.style.cssText = `
+          width: 100%; height: 100%;
           background: ${featured ? '#F59E0B' : '#1D4ED8'};
           border: 3px solid white;
           border-radius: 50%;
           box-shadow: 0 3px 10px rgba(0,0,0,0.35);
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          display: flex; align-items: center; justify-content: center;
           font-size: ${featured ? '18px' : '15px'};
           transition: transform 0.15s, box-shadow 0.15s;
-          z-index: ${featured ? 2 : 1};
-          position: relative;
+          transform-origin: center;
+          will-change: transform;
         `;
-        el.textContent = featured ? '⭐' : '🍺';
-        el.title = bar.name;
+        inner.textContent = featured ? '⭐' : '🍺';
+        inner.title = bar.name;
+        el.appendChild(inner);
 
         el.addEventListener('mouseenter', () => {
-          el.style.transform = 'scale(1.25)';
-          el.style.boxShadow = '0 6px 18px rgba(0,0,0,0.4)';
+          inner.style.transform = 'scale(1.25)';
+          inner.style.boxShadow = '0 6px 18px rgba(0,0,0,0.4)';
         });
         el.addEventListener('mouseleave', () => {
-          el.style.transform = 'scale(1)';
-          el.style.boxShadow = '0 3px 10px rgba(0,0,0,0.35)';
+          inner.style.transform = 'scale(1)';
+          inner.style.boxShadow = '0 3px 10px rgba(0,0,0,0.35)';
         });
         el.addEventListener('click', (e) => {
           e.stopPropagation();
