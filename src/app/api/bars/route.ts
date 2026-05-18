@@ -25,6 +25,7 @@ const barSchema = z.object({
   description_en: z.string().max(1000).optional().or(z.literal('')),
   cover_image_url: z.string().max(500).optional().nullable(),
   logo_url: z.string().max(500).optional().nullable(),
+  gallery_images: z.array(z.string().max(500)).max(10).optional().default([]),
 });
 
 export async function GET(_request: NextRequest) {
@@ -102,6 +103,7 @@ export async function POST(request: NextRequest) {
       description_en: data.description_en || null,
       cover_image_url: data.cover_image_url ?? null,
       logo_url: data.logo_url ?? null,
+      gallery_images: data.gallery_images ?? [],
       is_active: true,
       is_featured: false,
       is_verified: false,

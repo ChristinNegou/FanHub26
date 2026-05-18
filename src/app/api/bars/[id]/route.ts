@@ -12,6 +12,7 @@ const patchSchema = z.object({
   longitude: z.number().min(-180).max(180).optional(),
   cover_image_url: z.string().max(500).optional().nullable(),
   logo_url: z.string().max(500).optional().nullable(),
+  gallery_images: z.array(z.string().max(500)).max(10).optional(),
 });
 
 async function getOwnedBar(supabase: ReturnType<typeof createClient>, barId: string, userId: string) {

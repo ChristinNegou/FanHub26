@@ -128,19 +128,36 @@ export default async function BarPublicPage({ params }: PageProps) {
         {isFr ? 'Retour au Watch Finder' : 'Back to Watch Finder'}
       </Link>
 
-      {/* Cover */}
-      <div className="relative h-48 md:h-64 rounded-2xl overflow-hidden bg-gradient-to-br from-primary-700 to-primary-900 mb-6">
-        {bar.cover_image_url ? (
-          <img src={bar.cover_image_url} alt={bar.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-white/10 text-8xl font-bold select-none">
-            {bar.name.charAt(0)}
+      {/* Cover + gallery strip */}
+      <div className="mb-6">
+        <div className="relative h-48 md:h-64 rounded-2xl overflow-hidden bg-gradient-to-br from-primary-700 to-primary-900">
+          {bar.cover_image_url ? (
+            <img src={bar.cover_image_url} alt={bar.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-white/10 text-8xl font-bold select-none">
+              {bar.name.charAt(0)}
+            </div>
+          )}
+          <div className="absolute bottom-4 left-4 flex gap-2">
+            {bar.is_featured && <Badge variant="featured">⭐ Featured</Badge>}
+            {bar.is_verified && <Badge variant="verified">✓ {isFr ? 'Vérifié' : 'Verified'}</Badge>}
+          </div>
+        </div>
+
+        {/* Gallery thumbnails */}
+        {bar.gallery_images?.length > 0 && (
+          <div className="flex gap-2 mt-2 overflow-x-auto pb-1 scrollbar-hide">
+            {bar.gallery_images.map((url: string, i: number) => (
+              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                <img
+                  src={url}
+                  alt={`${bar.name} photo ${i + 2}`}
+                  className="h-20 w-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700 hover:opacity-90 transition-opacity"
+                />
+              </a>
+            ))}
           </div>
         )}
-        <div className="absolute bottom-4 left-4 flex gap-2">
-          {bar.is_featured && <Badge variant="featured">⭐ Featured</Badge>}
-          {bar.is_verified && <Badge variant="verified">✓ {isFr ? 'Vérifié' : 'Verified'}</Badge>}
-        </div>
       </div>
 
       {/* Header */}

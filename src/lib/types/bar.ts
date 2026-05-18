@@ -28,6 +28,7 @@ export interface Bar {
   is_active: boolean;
   logo_url: string | null;
   cover_image_url: string | null;
+  gallery_images: string[];
   created_at: string;
   updated_at: string;
 }
