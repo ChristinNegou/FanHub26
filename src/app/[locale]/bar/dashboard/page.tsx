@@ -6,7 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   BarChart3, MapPin, Star, Eye, Loader2,
   CheckCircle2, PlusCircle, ExternalLink, Sparkles, ChevronDown,
+  Pencil, Trash2, X, AlertTriangle,
 } from 'lucide-react';
+import { MAPBOX_TOKEN } from '@/lib/mapbox/config';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -42,6 +44,17 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
   const [savingMatches, setSavingMatches] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+
+  // Edit state
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ name: '', address: '', city: '', province: 'QC', postal_code: '', latitude: 0, longitude: 0 });
+  const [editGeocoded, setEditGeocoded] = useState(true);
+  const [editGeocoding, setEditGeocoding] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Delete state
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -81,6 +94,85 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
       setSelectedMatchIds(new Set((barMatchData ?? []).map((bm: any) => bm.match_id)));
     });
   }, [bar?.id]);
+
+  // Re-fetch bars after Stripe redirect to pick up is_featured update from webhook
+  useEffect(() => {
+    if (!showFeaturedSuccess || !user) return;
+    const timer = setTimeout(() => {
+      const supabase = createClient();
+      supabase
+        .from('bars')
+        .select('*')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: true })
+        .then(({ data }) => { if (data) setBars(data); });
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [showFeaturedSuccess, user]);
+
+  const openEdit = () => {
+    if (!bar) return;
+    setEditForm({
+      name: bar.name,
+      address: bar.address,
+      city: bar.city,
+      province: bar.province,
+      postal_code: bar.postal_code ?? '',
+      latitude: bar.latitude,
+      longitude: bar.longitude,
+    });
+    setEditGeocoded(true);
+    setEditing(true);
+  };
+
+  const geocodeEditAddress = async () => {
+    if (!editForm.address || !editForm.city || !editForm.province) return;
+    setEditGeocoding(true);
+    const query = `${editForm.address}, ${editForm.city}, ${editForm.province}, Canada`;
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&country=CA&limit=1`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.features?.length > 0) {
+        const [lng, lat] = data.features[0].center;
+        setEditForm((f) => ({ ...f, latitude: lat, longitude: lng }));
+        setEditGeocoded(true);
+      } else {
+        setEditGeocoded(false);
+      }
+    } finally {
+      setEditGeocoding(false);
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!bar || !editGeocoded) return;
+    setEditSaving(true);
+    const res = await fetch(`/api/bars/${bar.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editForm),
+    });
+    if (res.ok) {
+      const { bar: updated } = await res.json();
+      setBars((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+      setEditing(false);
+    }
+    setEditSaving(false);
+  };
+
+  const deleteBar = async () => {
+    if (!bar) return;
+    setDeleting(true);
+    const res = await fetch(`/api/bars/${bar.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      const newBars = bars.filter((b) => b.id !== bar.id);
+      setBars(newBars);
+      setSelectedBarId(newBars[0]?.id ?? null);
+      setConfirmDelete(false);
+    }
+    setDeleting(false);
+  };
 
   const toggleMatch = (matchId: string) => {
     setSelectedMatchIds((prev) => {
@@ -256,18 +348,154 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
         <>
           {/* Header */}
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{bar.name}</h1>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white truncate">{bar.name}</h1>
               <div className="flex items-center gap-1.5 mt-1 text-slate-500 dark:text-slate-400 text-sm">
-                <MapPin className="w-3.5 h-3.5" />
-                {bar.address}, {bar.city}
+                <MapPin className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{bar.address}, {bar.city}</span>
               </div>
             </div>
-            <div className="flex gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
               {bar.is_featured && <Badge variant="featured">⭐ Featured</Badge>}
               {bar.is_verified && <Badge variant="verified">✓ {isFr ? 'Vérifié' : 'Verified'}</Badge>}
+              <button
+                onClick={openEdit}
+                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-primary-700 dark:hover:text-primary-400 border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 hover:border-primary-300 transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                {isFr ? 'Modifier' : 'Edit'}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 border border-red-200 dark:border-red-800 rounded-lg px-2.5 py-1.5 hover:border-red-400 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {isFr ? 'Supprimer' : 'Delete'}
+              </button>
             </div>
           </div>
+
+          {/* Edit form */}
+          {editing && (
+            <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-5 flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {isFr ? 'Modifier les infos du bar' : 'Edit bar info'}
+                </h2>
+                <button onClick={() => setEditing(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                    {isFr ? 'Nom du bar' : 'Bar name'}
+                  </label>
+                  <input
+                    value={editForm.name}
+                    onChange={(e) => { setEditForm((f) => ({ ...f, name: e.target.value })); }}
+                    className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                    {isFr ? 'Adresse' : 'Address'}
+                  </label>
+                  <input
+                    value={editForm.address}
+                    onChange={(e) => { setEditForm((f) => ({ ...f, address: e.target.value })); setEditGeocoded(false); }}
+                    className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                      {isFr ? 'Ville' : 'City'}
+                    </label>
+                    <input
+                      value={editForm.city}
+                      onChange={(e) => { setEditForm((f) => ({ ...f, city: e.target.value })); setEditGeocoded(false); }}
+                      className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                      {isFr ? 'Code postal' : 'Postal code'}
+                    </label>
+                    <input
+                      value={editForm.postal_code}
+                      onChange={(e) => setEditForm((f) => ({ ...f, postal_code: e.target.value }))}
+                      className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+
+                {!editGeocoded && (
+                  <button
+                    type="button"
+                    onClick={geocodeEditAddress}
+                    disabled={editGeocoding}
+                    className="flex items-center gap-2 text-xs text-primary-700 dark:text-primary-400 border border-primary-300 rounded-lg px-3 py-2 hover:bg-primary-50 dark:hover:bg-primary-900/20 self-start"
+                  >
+                    {editGeocoding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                    {isFr ? 'Vérifier la nouvelle adresse' : 'Verify new address'}
+                  </button>
+                )}
+
+                {editGeocoded && (
+                  <p className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {isFr ? 'Adresse vérifiée' : 'Address verified'}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
+                  {isFr ? 'Annuler' : 'Cancel'}
+                </Button>
+                <Button size="sm" onClick={saveEdit} disabled={editSaving || !editGeocoded}>
+                  {editSaving && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                  {isFr ? 'Enregistrer' : 'Save'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Delete confirmation */}
+          {confirmDelete && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+                    {isFr ? `Supprimer "${bar.name}" ?` : `Delete "${bar.name}"?`}
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                    {isFr
+                      ? 'Cette action est irréversible. Tous les matchs associés seront supprimés.'
+                      : 'This action is irreversible. All associated matches will be removed.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+                  {isFr ? 'Annuler' : 'Cancel'}
+                </Button>
+                <button
+                  onClick={deleteBar}
+                  disabled={deleting}
+                  className="flex items-center gap-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg px-3 py-1.5 font-medium transition-colors disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  {isFr ? 'Supprimer définitivement' : 'Delete permanently'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Quick stats */}
           <div className="grid grid-cols-3 gap-4">

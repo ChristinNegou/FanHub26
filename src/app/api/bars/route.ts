@@ -23,6 +23,8 @@ const barSchema = z.object({
   atmosphere: z.enum(['lively', 'chill', 'sports_bar', 'pub']).optional().nullable(),
   description_fr: z.string().max(1000).optional().or(z.literal('')),
   description_en: z.string().max(1000).optional().or(z.literal('')),
+  cover_image_url: z.string().max(500).optional().nullable(),
+  logo_url: z.string().max(500).optional().nullable(),
 });
 
 export async function GET(_request: NextRequest) {
@@ -98,6 +100,8 @@ export async function POST(request: NextRequest) {
       atmosphere: data.atmosphere ?? null,
       description_fr: data.description_fr || null,
       description_en: data.description_en || null,
+      cover_image_url: data.cover_image_url ?? null,
+      logo_url: data.logo_url ?? null,
       is_active: true,
       is_featured: false,
       is_verified: false,
