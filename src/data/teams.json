@@ -1,0 +1,63 @@
+{
+  "teams": [
+    { "code": "MEX", "name_fr": "Mexique",             "name_en": "Mexico",                "group_letter": "A", "flag_url": "/flags/mex.svg", "continent": "North America" },
+    { "code": "RSA", "name_fr": "Afrique du Sud",       "name_en": "South Africa",          "group_letter": "A", "flag_url": "/flags/rsa.svg", "continent": "Africa" },
+    { "code": "KOR", "name_fr": "Corée du Sud",         "name_en": "South Korea",           "group_letter": "A", "flag_url": "/flags/kor.svg", "continent": "Asia" },
+    { "code": "CZE", "name_fr": "Tchéquie",             "name_en": "Czechia",               "group_letter": "A", "flag_url": "/flags/cze.svg", "continent": "Europe" },
+
+    { "code": "CAN", "name_fr": "Canada",               "name_en": "Canada",                "group_letter": "B", "flag_url": "/flags/can.svg", "continent": "North America" },
+    { "code": "SUI", "name_fr": "Suisse",               "name_en": "Switzerland",           "group_letter": "B", "flag_url": "/flags/sui.svg", "continent": "Europe" },
+    { "code": "BIH", "name_fr": "Bosnie-Herzégovine",  "name_en": "Bosnia and Herzegovina","group_letter": "B", "flag_url": "/flags/bih.svg", "continent": "Europe" },
+    { "code": "QAT", "name_fr": "Qatar",                "name_en": "Qatar",                 "group_letter": "B", "flag_url": "/flags/qat.svg", "continent": "Asia" },
+
+    { "code": "BRA", "name_fr": "Brésil",               "name_en": "Brazil",                "group_letter": "C", "flag_url": "/flags/bra.svg", "continent": "South America" },
+    { "code": "SCO", "name_fr": "Écosse",               "name_en": "Scotland",              "group_letter": "C", "flag_url": "/flags/sco.svg", "continent": "Europe" },
+    { "code": "MAR", "name_fr": "Maroc",                "name_en": "Morocco",               "group_letter": "C", "flag_url": "/flags/mar.svg", "continent": "Africa" },
+    { "code": "HAI", "name_fr": "Haïti",                "name_en": "Haiti",                 "group_letter": "C", "flag_url": "/flags/hai.svg", "continent": "North America" },
+
+    { "code": "USA", "name_fr": "États-Unis",           "name_en": "United States",         "group_letter": "D", "flag_url": "/flags/usa.svg", "continent": "North America" },
+    { "code": "TUR", "name_fr": "Türkiye",              "name_en": "Türkiye",               "group_letter": "D", "flag_url": "/flags/tur.svg", "continent": "Europe" },
+    { "code": "PAR", "name_fr": "Paraguay",             "name_en": "Paraguay",              "group_letter": "D", "flag_url": "/flags/par.svg", "continent": "South America" },
+    { "code": "AUS", "name_fr": "Australie",            "name_en": "Australia",             "group_letter": "D", "flag_url": "/flags/aus.svg", "continent": "Oceania" },
+
+    { "code": "GER", "name_fr": "Allemagne",            "name_en": "Germany",               "group_letter": "E", "flag_url": "/flags/ger.svg", "continent": "Europe" },
+    { "code": "ECU", "name_fr": "Équateur",             "name_en": "Ecuador",               "group_letter": "E", "flag_url": "/flags/ecu.svg", "continent": "South America" },
+    { "code": "CIV", "name_fr": "Côte d'Ivoire",        "name_en": "Ivory Coast",           "group_letter": "E", "flag_url": "/flags/civ.svg", "continent": "Africa" },
+    { "code": "CUW", "name_fr": "Curaçao",              "name_en": "Curaçao",               "group_letter": "E", "flag_url": "/flags/cuw.svg", "continent": "North America" },
+
+    { "code": "NED", "name_fr": "Pays-Bas",             "name_en": "Netherlands",           "group_letter": "F", "flag_url": "/flags/ned.svg", "continent": "Europe" },
+    { "code": "JPN", "name_fr": "Japon",                "name_en": "Japan",                 "group_letter": "F", "flag_url": "/flags/jpn.svg", "continent": "Asia" },
+    { "code": "TUN", "name_fr": "Tunisie",              "name_en": "Tunisia",               "group_letter": "F", "flag_url": "/flags/tun.svg", "continent": "Africa" },
+    { "code": "SWE", "name_fr": "Suède",                "name_en": "Sweden",                "group_letter": "F", "flag_url": "/flags/swe.svg", "continent": "Europe" },
+
+    { "code": "FRA", "name_fr": "France",               "name_en": "France",                "group_letter": "G", "flag_url": "/flags/fra.svg", "continent": "Europe" },
+    { "code": "NOR", "name_fr": "Norvège",              "name_en": "Norway",                "group_letter": "G", "flag_url": "/flags/nor.svg", "continent": "Europe" },
+    { "code": "SEN", "name_fr": "Sénégal",              "name_en": "Senegal",               "group_letter": "G", "flag_url": "/flags/sen.svg", "continent": "Africa" },
+    { "code": "IRQ", "name_fr": "Irak",                 "name_en": "Iraq",                  "group_letter": "G", "flag_url": "/flags/irq.svg", "continent": "Asia" },
+
+    { "code": "ESP", "name_fr": "Espagne",              "name_en": "Spain",                 "group_letter": "H", "flag_url": "/flags/esp.svg", "continent": "Europe" },
+    { "code": "URU", "name_fr": "Uruguay",              "name_en": "Uruguay",               "group_letter": "H", "flag_url": "/flags/uru.svg", "continent": "South America" },
+    { "code": "KSA", "name_fr": "Arabie Saoudite",      "name_en": "Saudi Arabia",          "group_letter": "H", "flag_url": "/flags/ksa.svg", "continent": "Asia" },
+    { "code": "CPV", "name_fr": "Cap-Vert",             "name_en": "Cape Verde",            "group_letter": "H", "flag_url": "/flags/cpv.svg", "continent": "Africa" },
+
+    { "code": "BEL", "name_fr": "Belgique",             "name_en": "Belgium",               "group_letter": "I", "flag_url": "/flags/bel.svg", "continent": "Europe" },
+    { "code": "IRN", "name_fr": "Iran",                 "name_en": "Iran",                  "group_letter": "I", "flag_url": "/flags/irn.svg", "continent": "Asia" },
+    { "code": "NZL", "name_fr": "Nouvelle-Zélande",     "name_en": "New Zealand",           "group_letter": "I", "flag_url": "/flags/nzl.svg", "continent": "Oceania" },
+    { "code": "EGY", "name_fr": "Égypte",               "name_en": "Egypt",                 "group_letter": "I", "flag_url": "/flags/egy.svg", "continent": "Africa" },
+
+    { "code": "ENG", "name_fr": "Angleterre",           "name_en": "England",               "group_letter": "J", "flag_url": "/flags/eng.svg", "continent": "Europe" },
+    { "code": "CRO", "name_fr": "Croatie",              "name_en": "Croatia",               "group_letter": "J", "flag_url": "/flags/cro.svg", "continent": "Europe" },
+    { "code": "PAN", "name_fr": "Panama",               "name_en": "Panama",                "group_letter": "J", "flag_url": "/flags/pan.svg", "continent": "North America" },
+    { "code": "GHA", "name_fr": "Ghana",                "name_en": "Ghana",                 "group_letter": "J", "flag_url": "/flags/gha.svg", "continent": "Africa" },
+
+    { "code": "POR", "name_fr": "Portugal",             "name_en": "Portugal",              "group_letter": "K", "flag_url": "/flags/por.svg", "continent": "Europe" },
+    { "code": "COL", "name_fr": "Colombie",             "name_en": "Colombia",              "group_letter": "K", "flag_url": "/flags/col.svg", "continent": "South America" },
+    { "code": "UZB", "name_fr": "Ouzbékistan",          "name_en": "Uzbekistan",            "group_letter": "K", "flag_url": "/flags/uzb.svg", "continent": "Asia" },
+    { "code": "COD", "name_fr": "RD Congo",             "name_en": "DR Congo",              "group_letter": "K", "flag_url": "/flags/cod.svg", "continent": "Africa" },
+
+    { "code": "ARG", "name_fr": "Argentine",            "name_en": "Argentina",             "group_letter": "L", "flag_url": "/flags/arg.svg", "continent": "South America" },
+    { "code": "ALG", "name_fr": "Algérie",              "name_en": "Algeria",               "group_letter": "L", "flag_url": "/flags/alg.svg", "continent": "Africa" },
+    { "code": "JOR", "name_fr": "Jordanie",             "name_en": "Jordan",                "group_letter": "L", "flag_url": "/flags/jor.svg", "continent": "Asia" },
+    { "code": "AUT", "name_fr": "Autriche",             "name_en": "Austria",               "group_letter": "L", "flag_url": "/flags/aut.svg", "continent": "Europe" }
+  ]
+}
