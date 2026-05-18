@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
+import { flagUrl } from '@/lib/utils/fifaFlags';
 
 interface Team {
   code: string;
@@ -102,12 +103,19 @@ export function CommunityClient({ teams, locale }: Props) {
                   href={`/${locale}/community/${team.code.toLowerCase()}`}
                   className="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 hover:border-primary-400 hover:shadow-md transition-all group"
                 >
-                  <img
-                    src={team.flag_url}
-                    alt={isFr ? team.name_fr : team.name_en}
-                    className="w-8 h-8 rounded-full object-cover shrink-0"
-                    onError={(e) => { (e.target as HTMLImageElement).src = `https://flagcdn.com/w40/${team.code.toLowerCase()}.png`; }}
-                  />
+                  {flagUrl(team.code) ? (
+                    <img
+                      src={flagUrl(team.code)}
+                      alt={isFr ? team.name_fr : team.name_en}
+                      width={32}
+                      height={32}
+                      className="w-8 h-8 rounded-full object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 shrink-0 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-200">
+                      {team.code.slice(0, 2)}
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate group-hover:text-primary-700 dark:group-hover:text-primary-400 transition-colors">
                       {isFr ? team.name_fr : team.name_en}

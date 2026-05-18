@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { ArrowLeft, MapPin, Users, Calendar, Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import teamsData from '@/data/teams.json';
+import { flagUrl2x } from '@/lib/utils/fifaFlags';
+
+export const dynamic = 'force-dynamic';
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://fan-hub26.vercel.app';
 
@@ -13,10 +16,6 @@ interface PageProps {
 
 function getTeam(slug: string) {
   return teamsData.teams.find((t) => t.code.toLowerCase() === slug.toLowerCase());
-}
-
-export function generateStaticParams() {
-  return teamsData.teams.map((t) => ({ teamSlug: t.code.toLowerCase() }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -52,8 +51,8 @@ export default async function TeamCommunityPage({ params }: PageProps) {
 
   const isFr = params.locale === 'fr';
   const name = isFr ? team.name_fr : team.name_en;
+  const flag = flagUrl2x(team.code);
 
-  // Fetch meetups for this team from Supabase
   let events: Array<{
     id: string;
     title: string;
@@ -70,7 +69,6 @@ export default async function TeamCommunityPage({ params }: PageProps) {
   try {
     const supabase = createClient();
 
-    // Get team row to find its id
     const { data: teamRow } = await supabase
       .from('teams')
       .select('id')
@@ -78,7 +76,6 @@ export default async function TeamCommunityPage({ params }: PageProps) {
       .single();
 
     if (teamRow) {
-      // Fetch upcoming events for this team
       const { data: eventRows } = await supabase
         .from('community_events')
         .select('id, title, description, city, address, event_date, max_attendees, current_attendees')
@@ -90,7 +87,6 @@ export default async function TeamCommunityPage({ params }: PageProps) {
 
       events = eventRows ?? [];
 
-      // Count fans with this as favourite team
       const { count } = await supabase
         .from('user_profiles')
         .select('id', { count: 'exact', head: true })
@@ -115,12 +111,19 @@ export default async function TeamCommunityPage({ params }: PageProps) {
 
       {/* Hero */}
       <div className="flex items-center gap-5 mb-6">
-        <img
-          src={team.flag_url}
-          alt={name}
-          className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-slate-700 shadow-lg"
-          onError={(e) => { (e.target as HTMLImageElement).src = `https://flagcdn.com/w80/${team.code.toLowerCase()}.png`; }}
-        />
+        {flag ? (
+          <img
+            src={flag}
+            alt={name}
+            width={80}
+            height={80}
+            className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-slate-700 shadow-lg"
+          />
+        ) : (
+          <div className="w-20 h-20 rounded-full bg-primary-100 dark:bg-primary-900/30 border-4 border-white dark:border-slate-700 shadow-lg flex items-center justify-center text-2xl font-bold text-primary-700">
+            {team.code}
+          </div>
+        )}
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{name}</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
@@ -167,7 +170,7 @@ export default async function TeamCommunityPage({ params }: PageProps) {
           <div className="text-center py-12 bg-slate-50 dark:bg-slate-800 rounded-2xl">
             <p className="text-4xl mb-3">🏟️</p>
             <p className="font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              {isFr ? 'Aucun meetup prévu pour l\'instant' : 'No meetups scheduled yet'}
+              {isFr ? "Aucun meetup prévu pour l'instant" : 'No meetups scheduled yet'}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {isFr
@@ -211,8 +214,7 @@ export default async function TeamCommunityPage({ params }: PageProps) {
                       <Calendar className="w-3.5 h-3.5" />
                       {date.toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', {
                         weekday: 'short', month: 'short', day: 'numeric',
-                      })}
-                      {' '}
+                      })}{' '}
                       {date.toLocaleTimeString(isFr ? 'fr-CA' : 'en-CA', {
                         hour: '2-digit', minute: '2-digit',
                       })}

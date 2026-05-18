@@ -10,6 +10,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'hatscripts.github.io',
       },
+      {
+        protocol: 'https',
+        hostname: 'flagcdn.com',
+      },
     ],
   },
   headers: async () => [
