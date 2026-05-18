@@ -180,25 +180,53 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
     }
   };
 
+  const resizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<Blob> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let { width, height } = img;
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('toBlob failed')), 'image/webp', 0.85);
+      };
+      img.onerror = reject;
+      img.src = objectUrl;
+    });
+
   const uploadImage = async (
     file: File,
     field: 'cover_image_url' | 'logo_url',
     setUploading: (v: boolean) => void,
   ) => {
     setUploading(true);
-    const supabase = createClient();
-    const ext = file.name.split('.').pop();
-    const path = `${Date.now()}-${field}.${ext}`;
-    const { data, error } = await supabase.storage
-      .from('bar-images')
-      .upload(path, file, { upsert: true });
-    if (error) {
-      setErrors((e) => ({ ...e, [field]: isFr ? 'Erreur upload — vérifiez que le bucket "bar-images" existe' : 'Upload error — check that bucket "bar-images" exists' }));
-    } else {
-      const { data: { publicUrl } } = supabase.storage.from('bar-images').getPublicUrl(data.path);
-      set(field, publicUrl);
+    try {
+      const [maxW, maxH] = field === 'logo_url' ? [400, 400] : [1200, 630];
+      const blob = await resizeImage(file, maxW, maxH);
+      const supabase = createClient();
+      const path = `${Date.now()}-${field}.webp`;
+      const { data, error } = await supabase.storage
+        .from('bar-images')
+        .upload(path, blob, { contentType: 'image/webp', upsert: true });
+      if (error) {
+        setErrors((e) => ({ ...e, [field]: isFr ? 'Erreur upload' : 'Upload error' }));
+      } else {
+        const { data: { publicUrl } } = supabase.storage.from('bar-images').getPublicUrl(data.path);
+        set(field, publicUrl);
+      }
+    } catch {
+      setErrors((e) => ({ ...e, [field]: isFr ? 'Erreur de traitement de l\'image' : 'Image processing error' }));
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   };
 
   const ToggleChip = ({ field, label }: { field: keyof FormData; label: string }) => (
