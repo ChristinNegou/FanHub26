@@ -180,23 +180,29 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
     }
   };
 
-  const resizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<Blob> =>
+  // Center-crop to square then scale to target size
+  const cropToSquare = (file: File, size: number): Promise<Blob> =>
     new Promise((resolve, reject) => {
       const img = new Image();
       const objectUrl = URL.createObjectURL(file);
       img.onload = () => {
         URL.revokeObjectURL(objectUrl);
-        let { width, height } = img;
-        if (width > maxWidth || height > maxHeight) {
-          const ratio = Math.min(maxWidth / width, maxHeight / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
+        const { width, height } = img;
+        const side = Math.min(width, height);
+        const sx = Math.round((width - side) / 2);
+        const sy = Math.round((height - side) / 2);
         const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('toBlob failed')), 'image/webp', 0.85);
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        canvas.toBlob(
+          (blob) => blob ? resolve(blob) : reject(new Error('toBlob failed')),
+          'image/webp',
+          0.92,
+        );
       };
       img.onerror = reject;
       img.src = objectUrl;
@@ -209,8 +215,8 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
   ) => {
     setUploading(true);
     try {
-      const [maxW, maxH] = field === 'logo_url' ? [400, 400] : [1200, 630];
-      const blob = await resizeImage(file, maxW, maxH);
+      const size = field === 'logo_url' ? 400 : 800;
+      const blob = await cropToSquare(file, size);
       const supabase = createClient();
       const path = `${Date.now()}-${field}.webp`;
       const { data, error } = await supabase.storage
@@ -448,7 +454,7 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
             {isFr ? 'Photo de couverture' : 'Cover photo'}
           </label>
           {form.cover_image_url ? (
-            <div className="relative w-full h-40 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+            <div className="relative w-48 h-48 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
               <img src={form.cover_image_url} alt="cover" className="w-full h-full object-cover" />
               <button
                 type="button"
@@ -459,7 +465,7 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
               </button>
             </div>
           ) : (
-            <label className={`flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
+            <label className={`flex flex-col items-center justify-center w-48 h-48 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
               uploadingCover ? 'border-primary-300 bg-primary-50 dark:bg-primary-900/20' : 'border-slate-300 dark:border-slate-600 hover:border-primary-400 bg-white dark:bg-slate-800'
             }`}>
               {uploadingCover ? (

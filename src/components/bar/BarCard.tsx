@@ -29,7 +29,7 @@ export function BarCard({ bar, locale, isSelected, onClick }: BarCardProps) {
       `}
     >
       {/* Cover image / placeholder */}
-      <div className="relative h-32 rounded-t-xl overflow-hidden bg-gradient-to-br from-primary-700 to-primary-900 flex-shrink-0">
+      <div className="relative aspect-square rounded-t-xl overflow-hidden bg-gradient-to-br from-primary-700 to-primary-900 flex-shrink-0">
         {bar.cover_image_url ? (
           <img
             src={bar.cover_image_url}
