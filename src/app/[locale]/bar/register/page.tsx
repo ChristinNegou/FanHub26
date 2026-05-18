@@ -1,15 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2, LogIn, UserPlus, AlertCircle } from 'lucide-react';
 import { BarRegistrationForm } from '@/components/bar/BarRegistrationForm';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 
 export default function BarRegisterPage({ params: { locale } }: { params: { locale: string } }) {
   const isFr = locale === 'fr';
+  const router = useRouter();
   const { user, loading } = useAuth();
 
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signup');
@@ -18,6 +20,24 @@ export default function BarRegisterPage({ params: { locale } }: { params: { loca
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [signupDone, setSignupDone] = useState(false);
+  const [hasBar, setHasBar] = useState(false);
+
+  // Redirect to dashboard if user already has a bar
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    supabase
+      .from('bars')
+      .select('id')
+      .eq('owner_id', user.id)
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setHasBar(true);
+          router.replace(`/${locale}/bar/dashboard`);
+        }
+      });
+  }, [user, locale, router]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +73,7 @@ export default function BarRegisterPage({ params: { locale } }: { params: { loca
     });
   };
 
-  if (loading) {
+  if (loading || hasBar) {
     return (
       <div className="container mx-auto px-4 py-16 flex justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-primary-700" />

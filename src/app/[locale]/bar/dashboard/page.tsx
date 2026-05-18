@@ -58,7 +58,9 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
       .from('bars')
       .select('*')
       .eq('owner_id', user.id)
-      .maybeSingle()
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single()
       .then(({ data }) => {
         setBar(data);
         setBarLoading(false);
