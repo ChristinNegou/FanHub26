@@ -52,6 +52,8 @@ export async function GET(request: NextRequest) {
     logo_url: b.logo_url,
     cover_image_url: b.cover_image_url,
     avg_rating: b.avg_rating,
+    phone: b.phone ?? null,
+    website: b.website ?? null,
   }));
 
   return NextResponse.json({ bars });
