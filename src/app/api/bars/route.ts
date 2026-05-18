@@ -8,9 +8,9 @@ const barSchema = z.object({
   address: z.string().min(5).max(200),
   city: z.string().min(2).max(50),
   province: z.enum(['QC', 'ON', 'BC', 'AB', 'MB', 'SK', 'NS', 'NB', 'NL', 'PE', 'YT', 'NT', 'NU']),
-  postal_code: z.string().regex(/^[A-Z]\d[A-Z]\s?\d[A-Z]\d$/i).optional().or(z.literal('')),
-  phone: z.string().regex(/^\+?1?\d{10,11}$/).optional().or(z.literal('')),
-  website: z.string().url().optional().or(z.literal('')),
+  postal_code: z.string().max(10).optional().or(z.literal('')),
+  phone: z.string().max(30).optional().or(z.literal('')),
+  website: z.string().max(200).optional().or(z.literal('')),
   instagram: z.string().max(60).optional().or(z.literal('')),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
@@ -55,7 +55,9 @@ export async function POST(request: NextRequest) {
 
   const parsed = barSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
+    const fields = parsed.error.flatten().fieldErrors;
+    const first = Object.entries(fields).find(([, msgs]) => msgs?.length)?.[1]?.[0];
+    return NextResponse.json({ error: { message: first ?? 'Validation échouée' } }, { status: 422 });
   }
 
   const data = parsed.data;
@@ -104,8 +106,8 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (insertError) {
-    console.error('Bar insert error:', insertError);
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+    console.error('Bar insert error:', JSON.stringify(insertError));
+    return NextResponse.json({ error: { message: insertError.message } }, { status: 500 });
   }
 
   return NextResponse.json({ bar }, { status: 201 });
