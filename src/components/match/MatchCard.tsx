@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MapPin, CalendarPlus, ExternalLink } from 'lucide-react';
+import { MapPin, CalendarPlus, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { formatMatchTime } from '@/lib/utils/dates';
 import { getFlagUrl } from '@/lib/utils/flags';
@@ -95,6 +95,21 @@ export function MatchCard({ match: m, timezone, locale }: MatchCardProps) {
   const gcLocation = encodeURIComponent(`${m.venue_name}, ${m.venue_city}`);
   const gcLink = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${gcTitle}&dates=${gcStart}/${gcEnd}&details=${gcDetails}&location=${gcLocation}`;
 
+  const icsContent = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//FanHub26//EN',
+    'BEGIN:VEVENT',
+    `DTSTART:${gcStart}`,
+    `DTEND:${gcEnd}`,
+    `SUMMARY:${homeName} vs ${awayName} — FIFA 2026`,
+    `DESCRIPTION:${stageFull} · ${m.venue_name}\\, ${m.venue_city}`,
+    `LOCATION:${m.venue_name}\\, ${m.venue_city}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+  const icsHref = `data:text/calendar;charset=utf-8,${encodeURIComponent(icsContent)}`;
+
   return (
     <div className={`
       bg-white dark:bg-slate-800 rounded-xl border transition-colors
@@ -168,6 +183,16 @@ export function MatchCard({ match: m, timezone, locale }: MatchCardProps) {
                 className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-primary-700 dark:hover:text-primary-400 transition-colors border border-slate-200 dark:border-slate-700 px-2 py-1.5 rounded-lg"
               >
                 <CalendarPlus className="w-3 h-3" />
+              </a>
+            )}
+            {!isFinished && (
+              <a
+                href={icsHref}
+                download={`match-${m.match_number}.ics`}
+                title={isFr ? 'Télécharger le fichier .ics' : 'Download .ics file'}
+                className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-primary-700 dark:hover:text-primary-400 transition-colors border border-slate-200 dark:border-slate-700 px-2 py-1.5 rounded-lg"
+              >
+                <Download className="w-3 h-3" />
               </a>
             )}
           </div>

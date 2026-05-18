@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { MapPin, Phone, Globe, Instagram, Volume2, Tv, TreePine, UtensilsCrossed, Star, ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { Badge } from '@/components/ui/Badge';
+import { BarReviewForm } from '@/components/bar/BarReviewForm';
+import { ShareButton } from '@/components/ui/ShareButton';
+import { SaveButton } from '@/components/ui/SaveButton';
 
 interface PageProps {
   params: { locale: string; barSlug: string };
@@ -148,6 +151,19 @@ export default async function BarPublicPage({ params }: PageProps) {
             <MapPin className="w-4 h-4" />
             <span>{bar.address}, {bar.city}, {bar.province}</span>
           </div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <SaveButton
+              id={bar.id}
+              type="bar"
+              label={isFr ? 'Sauvegarder' : 'Save'}
+              labelSaved={isFr ? 'Sauvegardé' : 'Saved'}
+            />
+            <ShareButton
+              title={`${bar.name} — FanHub26`}
+              text={isFr ? `Regardez les matchs de la Coupe du Monde 2026 au ${bar.name} à ${bar.city}` : `Watch the 2026 World Cup at ${bar.name} in ${bar.city}`}
+              label={isFr ? 'Partager' : 'Share'}
+            />
+          </div>
         </div>
         {avgRating !== null && (
           <div className="flex flex-col items-center bg-amber-50 dark:bg-amber-900/20 rounded-xl px-4 py-2 shrink-0">
@@ -254,7 +270,7 @@ export default async function BarPublicPage({ params }: PageProps) {
 
       {/* Reviews */}
       {reviews && reviews.length > 0 && (
-        <section>
+        <section className="mb-6">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
             {isFr ? 'Avis' : 'Reviews'}
           </h2>
@@ -285,6 +301,9 @@ export default async function BarPublicPage({ params }: PageProps) {
           </div>
         </section>
       )}
+
+      {/* Write a review */}
+      <BarReviewForm barId={bar.id} locale={locale} />
     </div>
   );
 }

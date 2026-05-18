@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { MapPin, Volume2, Tv, UtensilsCrossed, TreePine, Star, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import type { BarWithDistance } from '@/lib/types/bar';
+import { SaveButton } from '@/components/ui/SaveButton';
 
 interface BarCardProps {
   bar: BarWithDistance;
@@ -106,14 +106,19 @@ export function BarCard({ bar, locale, isSelected, onClick }: BarCardProps) {
         )}
 
         {/* CTA */}
-        <Link
-          href={`/${locale}/bar/${bar.slug}`}
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-primary-700 dark:text-primary-400 hover:underline mt-1"
-        >
-          <ExternalLink className="w-3 h-3" />
-          {isFr ? 'Voir détails' : 'View details'}
-        </Link>
+        <div className="flex items-center justify-between gap-2 mt-1">
+          <Link
+            href={`/${locale}/bar/${bar.slug}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700 dark:text-primary-400 hover:underline"
+          >
+            <ExternalLink className="w-3 h-3" />
+            {isFr ? 'Voir détails' : 'View details'}
+          </Link>
+          <div onClick={(e) => e.stopPropagation()}>
+            <SaveButton id={bar.id} type="bar" />
+          </div>
+        </div>
       </div>
     </div>
   );

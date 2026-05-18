@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Users, Calendar, Plus } from 'lucide-react';
+import { ArrowLeft, Users, Calendar, Plus } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import teamsData from '@/data/teams.json';
 import { flagUrl2x } from '@/lib/utils/fifaFlags';
+import { EventListClient } from '@/components/community/EventListClient';
+import { FavoriteTeamButton } from '@/components/community/FavoriteTeamButton';
+import { ShareButton } from '@/components/ui/ShareButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +68,7 @@ export default async function TeamCommunityPage({ params }: PageProps) {
   }> = [];
 
   let fanCount = 0;
+  let dbTeamId: string | null = null;
 
   try {
     // Admin client bypasses RLS on teams table (public reference data)
@@ -77,6 +81,8 @@ export default async function TeamCommunityPage({ params }: PageProps) {
       .single();
 
     if (teamRow) {
+      dbTeamId = teamRow.id;
+
       const { data: eventRows } = await admin
         .from('community_events')
         .select('id, title, description, city, address, event_date, max_attendees, current_attendees')
@@ -125,7 +131,7 @@ export default async function TeamCommunityPage({ params }: PageProps) {
             {team.code}
           </div>
         )}
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{name}</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
             {isFr ? `Groupe ${team.group_letter}` : `Group ${team.group_letter}`}
@@ -136,6 +142,13 @@ export default async function TeamCommunityPage({ params }: PageProps) {
               {fanCount} {isFr ? 'fans au Canada' : 'fans in Canada'}
             </p>
           )}
+          <div className="flex flex-wrap gap-2 mt-3">
+            {dbTeamId && <FavoriteTeamButton teamId={dbTeamId} locale={params.locale} />}
+            <ShareButton
+              title={isFr ? `Communauté ${name} — FanHub26` : `${name} Fan Community — FanHub26`}
+              label={isFr ? 'Partager' : 'Share'}
+            />
+          </div>
         </div>
       </div>
 
@@ -167,77 +180,7 @@ export default async function TeamCommunityPage({ params }: PageProps) {
           {isFr ? 'Watch parties à venir' : 'Upcoming watch parties'}
         </h2>
 
-        {events.length === 0 ? (
-          <div className="text-center py-12 bg-slate-50 dark:bg-slate-800 rounded-2xl">
-            <p className="text-4xl mb-3">🏟️</p>
-            <p className="font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              {isFr ? "Aucun meetup prévu pour l'instant" : 'No meetups scheduled yet'}
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              {isFr
-                ? 'Soyez le premier à organiser un watch party dans votre ville !'
-                : 'Be the first to organize a watch party in your city!'}
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {events.map((event) => {
-              const date = new Date(event.event_date);
-              const spotsLeft = event.max_attendees
-                ? event.max_attendees - event.current_attendees
-                : null;
-              const isFull = spotsLeft !== null && spotsLeft <= 0;
-
-              return (
-                <div
-                  key={event.id}
-                  className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <h3 className="font-semibold text-slate-900 dark:text-white">{event.title}</h3>
-                    {isFull ? (
-                      <span className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-2 py-0.5 rounded-full font-medium shrink-0">
-                        {isFr ? 'Complet' : 'Full'}
-                      </span>
-                    ) : spotsLeft !== null ? (
-                      <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full font-medium shrink-0">
-                        {spotsLeft} {isFr ? 'places' : 'spots'}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {event.description && (
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">{event.description}</p>
-                  )}
-
-                  <div className="flex flex-wrap gap-3 text-sm text-slate-500 dark:text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {date.toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', {
-                        weekday: 'short', month: 'short', day: 'numeric',
-                      })}{' '}
-                      {date.toLocaleTimeString(isFr ? 'fr-CA' : 'en-CA', {
-                        hour: '2-digit', minute: '2-digit',
-                      })}
-                    </span>
-                    {event.address && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5" />
-                        {event.address}, {event.city}
-                      </span>
-                    )}
-                    {event.current_attendees > 0 && (
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5" />
-                        {event.current_attendees} {isFr ? 'inscrits' : 'attending'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <EventListClient events={events} locale={params.locale} />
       </section>
 
       {/* Watch finder CTA */}
