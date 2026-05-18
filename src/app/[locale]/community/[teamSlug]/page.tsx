@@ -151,7 +151,7 @@ export default async function TeamCommunityPage({ params }: PageProps) {
           </p>
         </div>
         <Link
-          href={`/${params.locale}/bar/register`}
+          href={`/${params.locale}/community/${params.teamSlug}/create`}
           className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shrink-0"
         >
           <Plus className="w-4 h-4" />
