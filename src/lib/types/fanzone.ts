@@ -7,6 +7,7 @@ export interface FanZone {
   name_en: string | null;
   type: FanZoneType;
   city: string;
+  province?: string;
   address: string;
   latitude: number;
   longitude: number;
@@ -22,5 +23,5 @@ export interface FanZone {
   operating_hours: string | null;
   website: string | null;
   image_url: string | null;
-  created_at: string;
+  created_at?: string;
 }
