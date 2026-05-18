@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, MapPin, Users, Calendar, Plus } from 'lucide-react';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import teamsData from '@/data/teams.json';
 import { flagUrl2x } from '@/lib/utils/fifaFlags';
 
@@ -67,16 +67,17 @@ export default async function TeamCommunityPage({ params }: PageProps) {
   let fanCount = 0;
 
   try {
-    const supabase = createClient();
+    // Admin client bypasses RLS on teams table (public reference data)
+    const admin = createAdminClient();
 
-    const { data: teamRow } = await supabase
+    const { data: teamRow } = await admin
       .from('teams')
       .select('id')
       .eq('code', team.code)
       .single();
 
     if (teamRow) {
-      const { data: eventRows } = await supabase
+      const { data: eventRows } = await admin
         .from('community_events')
         .select('id, title, description, city, address, event_date, max_attendees, current_attendees')
         .eq('team_id', teamRow.id)
@@ -87,7 +88,7 @@ export default async function TeamCommunityPage({ params }: PageProps) {
 
       events = eventRows ?? [];
 
-      const { count } = await supabase
+      const { count } = await admin
         .from('user_profiles')
         .select('id', { count: 'exact', head: true })
         .eq('favorite_team_id', teamRow.id);

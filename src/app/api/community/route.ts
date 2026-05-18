@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -7,24 +8,28 @@ export async function GET(request: NextRequest) {
   const city = searchParams.get('city');
 
   try {
-    const supabase = createClient();
+    // Use admin client so teams table is always readable
+    const admin = createAdminClient();
 
-    let query = supabase
+    let teamId: string | null = null;
+    if (teamCode) {
+      const { data: teamRow } = await admin
+        .from('teams')
+        .select('id')
+        .eq('code', teamCode.toUpperCase())
+        .single();
+      teamId = teamRow?.id ?? null;
+      if (!teamId) return NextResponse.json({ events: [] });
+    }
+
+    let query = admin
       .from('community_events')
       .select('id, title, description, city, address, event_date, max_attendees, current_attendees')
       .eq('is_active', true)
       .gte('event_date', new Date().toISOString())
       .order('event_date', { ascending: true });
 
-    if (teamCode) {
-      const { data: teamRow } = await supabase
-        .from('teams')
-        .select('id')
-        .eq('code', teamCode.toUpperCase())
-        .single();
-      if (teamRow) query = query.eq('team_id', teamRow.id);
-    }
-
+    if (teamId) query = query.eq('team_id', teamId);
     if (city) query = query.ilike('city', `%${city}%`);
 
     const { data, error } = await query;
@@ -38,8 +43,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Auth check uses user client (cookies)
     const supabase = createClient();
-
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -56,18 +61,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Event date must be in the future' }, { status: 400 });
     }
 
-    // Resolve team_id from code
-    const { data: teamRow } = await supabase
+    // Use admin client to resolve team_id — bypasses RLS on teams table
+    const admin = createAdminClient();
+
+    const { data: teamRow, error: teamErr } = await admin
       .from('teams')
       .select('id')
       .eq('code', team_code.toUpperCase())
       .single();
 
-    const { data, error } = await supabase
+    if (teamErr || !teamRow) {
+      return NextResponse.json({ error: 'Unknown team code' }, { status: 400 });
+    }
+
+    const { data, error } = await admin
       .from('community_events')
       .insert({
         organizer_id: user.id,
-        team_id: teamRow?.id ?? null,
+        team_id: teamRow.id,
         title: title.trim(),
         description: description?.trim() || null,
         city: city.trim(),
