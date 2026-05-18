@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { MapPin, CalendarDays, Zap, CheckCircle, Star, Trophy } from 'lucide-react';
+import { MapPin, CalendarDays, Zap, CheckCircle, Star } from 'lucide-react';
 import { MatchCountdown } from '@/components/match/MatchCountdown';
+
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://fanhub26.ca';
 
 export async function generateMetadata({
   params: { locale },
@@ -9,18 +11,37 @@ export async function generateMetadata({
   params: { locale: string };
 }): Promise<Metadata> {
   const isFr = locale === 'fr';
+  const title = isFr
+    ? 'FanHub26 — Où regarder la Coupe du Monde 2026 au Canada'
+    : 'FanHub26 — Where to Watch the 2026 World Cup in Canada';
+  const description = isFr
+    ? 'Trouvez un bar qui diffuse la Coupe du Monde 2026 près de chez vous. Carte interactive, filtres son/écran géant, calendrier des matchs, fan zones.'
+    : 'Find a bar showing the 2026 World Cup near you. Interactive map, sound/big screen filters, match schedule, fan zones.';
+  const ogTitle = isFr ? 'Où regarder la Coupe du Monde 2026 au Canada ?' : 'Where to Watch the 2026 World Cup in Canada?';
+  const ogSub = isFr ? 'Carte interactive · Calendrier · Fan zones · Bilingue FR/EN' : 'Interactive map · Schedule · Fan zones · Bilingual FR/EN';
+
   return {
-    title: isFr
-      ? 'FanHub26 — Où regarder la Coupe du Monde 2026 au Canada'
-      : 'FanHub26 — Where to Watch the 2026 World Cup in Canada',
-    description: isFr
-      ? 'Trouvez un bar qui diffuse la Coupe du Monde 2026 près de chez vous. Carte interactive, filtres son/écran géant, calendrier des matchs, fan zones.'
-      : 'Find a bar showing the 2026 World Cup near you. Interactive map, sound/big screen filters, match schedule, fan zones.',
+    title,
+    description,
+    keywords: isFr
+      ? ['coupe du monde 2026', 'bar montreal', 'bar toronto', 'regarder match bar', 'watch party canada', 'fan zone 2026']
+      : ['world cup 2026', 'bar montreal', 'bar toronto', 'watch match bar', 'watch party canada', 'fan zone 2026'],
     openGraph: {
-      title: isFr ? 'FanHub26 — Coupe du Monde 2026 au Canada' : 'FanHub26 — 2026 World Cup in Canada',
-      description: isFr
-        ? 'La seule plateforme bilingue pour vivre la Coupe du Monde 2026 au Canada.'
-        : 'The only bilingual platform to experience the 2026 World Cup in Canada.',
+      title: ogTitle,
+      description,
+      images: [{ url: `${BASE_URL}/api/og?title=${encodeURIComponent(ogTitle)}&sub=${encodeURIComponent(ogSub)}`, width: 1200, height: 630 }],
+      type: 'website',
+      locale: locale === 'fr' ? 'fr_CA' : 'en_CA',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: ogTitle,
+      description,
+      images: [`${BASE_URL}/api/og?title=${encodeURIComponent(ogTitle)}&sub=${encodeURIComponent(ogSub)}`],
+    },
+    alternates: {
+      canonical: `${BASE_URL}/${locale}`,
+      languages: { fr: `${BASE_URL}/fr`, en: `${BASE_URL}/en` },
     },
   };
 }

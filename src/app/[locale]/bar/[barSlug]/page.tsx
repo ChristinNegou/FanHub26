@@ -9,20 +9,40 @@ interface PageProps {
   params: { locale: string; barSlug: string };
 }
 
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://fanhub26.ca';
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const supabase = createClient();
   const { data: bar } = await supabase
     .from('bars')
-    .select('name, description_fr, description_en, city')
+    .select('name, description_fr, description_en, city, cover_image_url')
     .eq('slug', params.barSlug)
     .single();
 
   if (!bar) return { title: 'Bar introuvable' };
 
-  const desc = params.locale === 'fr' ? bar.description_fr : bar.description_en;
+  const isFr = params.locale === 'fr';
+  const desc = (isFr ? bar.description_fr : bar.description_en)
+    ?? `${bar.name} diffuse les matchs de la Coupe du Monde 2026 à ${bar.city}.`;
+  const title = `${bar.name} — Coupe du Monde 2026 | FanHub26`;
+  const ogTitle = `${bar.name} — ${isFr ? 'Watch Party Coupe du Monde 2026' : 'World Cup 2026 Watch Party'}`;
+  const ogSub = `${bar.city} · FanHub26`;
+
   return {
-    title: `${bar.name} — Coupe du Monde 2026 | FanHub26`,
-    description: desc ?? `${bar.name} diffuse les matchs de la Coupe du Monde 2026 à ${bar.city}.`,
+    title,
+    description: desc,
+    openGraph: {
+      title: ogTitle,
+      description: desc,
+      images: bar.cover_image_url
+        ? [{ url: bar.cover_image_url, width: 800, height: 800 }]
+        : [{ url: `${BASE_URL}/api/og?title=${encodeURIComponent(ogTitle)}&sub=${encodeURIComponent(ogSub)}`, width: 1200, height: 630 }],
+      type: 'website',
+    },
+    twitter: { card: 'summary_large_image', title: ogTitle, description: desc },
+    alternates: {
+      canonical: `${BASE_URL}/${params.locale}/bar/${params.barSlug}`,
+    },
   };
 }
 
@@ -60,8 +80,42 @@ export default async function BarPublicPage({ params }: PageProps) {
     pub: 'Pub',
   };
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BarOrPub',
+    name: bar.name,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: bar.address,
+      addressLocality: bar.city,
+      addressRegion: bar.province,
+      postalCode: bar.postal_code ?? undefined,
+      addressCountry: 'CA',
+    },
+    geo: {
+      '@type': 'GeoCoordinates',
+      latitude: bar.latitude,
+      longitude: bar.longitude,
+    },
+    ...(bar.phone && { telephone: bar.phone }),
+    ...(bar.website && { url: bar.website }),
+    ...(bar.cover_image_url && { image: bar.cover_image_url }),
+    ...(avgRating !== null && {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: avgRating.toFixed(1),
+        reviewCount: reviews!.length,
+        bestRating: 5,
+      },
+    }),
+  };
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Back link */}
       <Link
         href={`/${locale}/watch`}
