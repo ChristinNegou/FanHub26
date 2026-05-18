@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { MapPin, Loader2, CheckCircle2, AlertCircle, ImagePlus, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -81,6 +81,21 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const addressWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (addressWrapperRef.current && !addressWrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const set = (field: keyof FormData, value: unknown) => {
     setForm((f) => ({ ...f, [field]: value }));
@@ -88,6 +103,45 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
     if (field === 'address' || field === 'city' || field === 'province') {
       setGeocoded(false);
     }
+  };
+
+  const fetchSuggestions = async (query: string) => {
+    if (query.length < 3) { setSuggestions([]); setShowSuggestions(false); return; }
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&country=CA&types=address&limit=6&language=${isFr ? 'fr' : 'en'}`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      setSuggestions(data.features ?? []);
+      setShowSuggestions(true);
+    } catch {
+      setSuggestions([]);
+    }
+  };
+
+  const handleAddressInput = (value: string) => {
+    set('address', value);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchSuggestions(value), 280);
+  };
+
+  const selectSuggestion = (feature: any) => {
+    const [lng, lat] = feature.center;
+    const street = feature.address ? `${feature.address} ${feature.text}` : feature.text;
+    let city = '';
+    let province = form.province;
+    let postal_code = '';
+
+    for (const ctx of feature.context ?? []) {
+      if (ctx.id.startsWith('place.')) city = ctx.text;
+      if (ctx.id.startsWith('region.')) province = (ctx.short_code as string)?.replace('CA-', '') || province;
+      if (ctx.id.startsWith('postcode.')) postal_code = ctx.text;
+    }
+
+    setForm((f) => ({ ...f, address: street, city, province, postal_code, latitude: lat, longitude: lng }));
+    setErrors((e) => { const n = { ...e }; delete n.address; delete n.city; delete n.province; return n; });
+    setGeocoded(true);
+    setSuggestions([]);
+    setShowSuggestions(false);
   };
 
   const geocodeAddress = async () => {
@@ -292,13 +346,53 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-700 pb-2">
           {isFr ? '2. Localisation' : '2. Location'}
         </h2>
-        <Input
-          label={isFr ? 'Adresse *' : 'Address *'}
-          value={form.address}
-          onChange={(e) => set('address', e.target.value)}
-          error={errors.address}
-          placeholder="123 Rue Sainte-Catherine"
-        />
+        {/* Address autocomplete */}
+        <div ref={addressWrapperRef} className="relative flex flex-col gap-1">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            {isFr ? 'Adresse *' : 'Address *'}
+          </label>
+          <input
+            type="text"
+            value={form.address}
+            onChange={(e) => handleAddressInput(e.target.value)}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            placeholder="123 Rue Sainte-Catherine"
+            autoComplete="off"
+            className={`rounded-lg border px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+              errors.address
+                ? 'border-red-400 dark:border-red-500'
+                : 'border-slate-300 dark:border-slate-600'
+            }`}
+          />
+          {errors.address && (
+            <p className="text-xs text-red-500 mt-0.5">{errors.address}</p>
+          )}
+
+          {/* Suggestions dropdown */}
+          {showSuggestions && suggestions.length > 0 && (
+            <ul className="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
+              {suggestions.map((feature) => (
+                <li key={feature.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); selectSuggestion(feature); }}
+                    className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-b border-slate-100 dark:border-slate-700 last:border-0"
+                  >
+                    <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm text-slate-900 dark:text-white truncate font-medium">
+                        {feature.address ? `${feature.address} ${feature.text}` : feature.text}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        {feature.context?.map((c: any) => c.text).join(', ')}
+                      </p>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="sm:col-span-2">
             <Input
