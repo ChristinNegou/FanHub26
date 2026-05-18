@@ -46,6 +46,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
+  // One bar per owner — return existing bar if already registered
+  const { data: existing } = await supabase
+    .from('bars')
+    .select('id')
+    .eq('owner_id', user.id)
+    .limit(1);
+  if (existing && existing.length > 0) {
+    return NextResponse.json({ error: { message: 'Vous avez déjà un bar enregistré.' } }, { status: 409 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -64,13 +74,13 @@ export async function POST(request: NextRequest) {
 
   // Generate a unique slug
   let slug = slugify(data.name);
-  const { data: existing } = await supabase
+  const { data: slugMatches } = await supabase
     .from('bars')
     .select('slug')
     .like('slug', `${slug}%`);
 
-  if (existing && existing.length > 0) {
-    slug = `${slug}-${existing.length + 1}`;
+  if (slugMatches && slugMatches.length > 0) {
+    slug = `${slug}-${slugMatches.length + 1}`;
   }
 
   const { data: bar, error: insertError } = await supabase
