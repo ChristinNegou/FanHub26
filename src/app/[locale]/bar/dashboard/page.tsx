@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   BarChart3, MapPin, Settings, Star, Eye, Loader2,
-  CheckCircle2, AlertCircle, PlusCircle, ExternalLink,
+  CheckCircle2, AlertCircle, PlusCircle, ExternalLink, Sparkles,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +30,8 @@ interface MatchRow {
 export default function BarDashboardPage({ params: { locale } }: { params: { locale: string } }) {
   const isFr = locale === 'fr';
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const showFeaturedSuccess = searchParams.get('featured') === 'success';
   const { user, loading: authLoading, signOut } = useAuth();
 
   const [bar, setBar] = useState<Bar | null>(null);
@@ -38,6 +40,7 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
   const [selectedMatchIds, setSelectedMatchIds] = useState<Set<string>>(new Set());
   const [savingMatches, setSavingMatches] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
 
   // Redirect to register if not authenticated
   useEffect(() => {
@@ -157,6 +160,23 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
     );
   }
 
+  const startFeaturedCheckout = async () => {
+    if (!bar) return;
+    setCheckingOut(true);
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barId: bar.id, locale }),
+      });
+      const { url, error } = await res.json();
+      if (url) window.location.href = url;
+      else console.error('Checkout error:', error);
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
   const matchLabel = (m: MatchRow) => {
     const home = isFr
       ? (m.home_team_name_fr ?? m.home_team_placeholder ?? '?')
@@ -184,6 +204,18 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
 
   return (
     <div className="container mx-auto px-4 py-10 max-w-3xl flex flex-col gap-8">
+      {/* Featured payment success banner */}
+      {showFeaturedSuccess && (
+        <div className="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl px-4 py-3">
+          <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
+          <p className="text-sm font-medium text-green-800 dark:text-green-200">
+            {isFr
+              ? 'Paiement confirmé — votre bar est maintenant en vedette !'
+              : 'Payment confirmed — your bar is now featured!'}
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -228,6 +260,47 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
           <ExternalLink className="w-3 h-3" />
         </Link>
       </div>
+
+      {/* Featured upgrade */}
+      {bar.is_featured ? (
+        <div className="flex items-start gap-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
+          <Sparkles className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-amber-900 dark:text-amber-200 text-sm">
+              {isFr ? 'Votre bar est en vedette' : 'Your bar is featured'}
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+              {isFr ? 'Actif jusqu\'au ' : 'Active until '}
+              {bar.featured_until
+                ? new Date(bar.featured_until).toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
+                : '—'}
+            </p>
+          </div>
+          <Badge variant="featured">⭐ Featured</Badge>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-br from-primary-50 to-indigo-50 dark:from-primary-900/20 dark:to-indigo-900/20 border border-primary-200 dark:border-primary-800 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="w-4 h-4 text-primary-700 dark:text-primary-400" />
+              <span className="font-bold text-slate-900 dark:text-white text-sm">
+                {isFr ? 'Passer en vedette' : 'Get featured'}
+              </span>
+              <span className="text-xs bg-primary-700 text-white rounded-full px-2 py-0.5 font-semibold">49 $/mois</span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              {isFr
+                ? 'Apparaissez en tête des résultats de recherche. Annulez à tout moment.'
+                : 'Appear at the top of search results. Cancel anytime.'}
+            </p>
+          </div>
+          <Button size="sm" onClick={startFeaturedCheckout} disabled={checkingOut} className="shrink-0">
+            {checkingOut && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+            {isFr ? 'Mettre en avant' : 'Get featured'}
+          </Button>
+        </div>
+      )}
 
       {/* Match selection */}
       <section>

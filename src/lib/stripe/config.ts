@@ -4,17 +4,4 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20',
 });
 
-export const STRIPE_PLANS = {
-  featured: {
-    priceId: '',
-    amount: 4900,
-    currency: 'cad',
-    name: 'Featured',
-  },
-  premium: {
-    priceId: '',
-    amount: 9900,
-    currency: 'cad',
-    name: 'Premium',
-  },
-} as const;
+export const FEATURED_PRICE_CAD = 4900; // 49.00 CAD in cents
