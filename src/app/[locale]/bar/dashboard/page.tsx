@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  BarChart3, MapPin, Settings, Star, Eye, Loader2,
-  CheckCircle2, AlertCircle, PlusCircle, ExternalLink, Sparkles,
+  BarChart3, MapPin, Star, Eye, Loader2,
+  CheckCircle2, PlusCircle, ExternalLink, Sparkles, ChevronDown,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -34,59 +34,58 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
   const showFeaturedSuccess = searchParams.get('featured') === 'success';
   const { user, loading: authLoading, signOut } = useAuth();
 
-  const [bar, setBar] = useState<Bar | null>(null);
-  const [barLoading, setBarLoading] = useState(true);
+  const [bars, setBars] = useState<Bar[]>([]);
+  const [selectedBarId, setSelectedBarId] = useState<string | null>(null);
+  const [barsLoading, setBarsLoading] = useState(true);
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [selectedMatchIds, setSelectedMatchIds] = useState<Set<string>>(new Set());
   const [savingMatches, setSavingMatches] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
 
-  // Redirect to register if not authenticated
+  // Redirect if not authenticated
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push(`/${locale}/bar/register`);
-    }
+    if (!authLoading && !user) router.push(`/${locale}/bar/register`);
   }, [user, authLoading, locale, router]);
 
-  // Fetch owner's bar
+  // Fetch all owner's bars
   useEffect(() => {
     if (!user) return;
     const supabase = createClient();
-
     supabase
       .from('bars')
       .select('*')
       .eq('owner_id', user.id)
       .order('created_at', { ascending: true })
       .then(({ data }) => {
-        setBar(data?.[0] ?? null);
-        setBarLoading(false);
+        const result = data ?? [];
+        setBars(result);
+        if (result.length > 0) setSelectedBarId(result[0].id);
+        setBarsLoading(false);
       });
   }, [user]);
 
-  // Fetch upcoming matches + already selected ones
+  const bar = bars.find((b) => b.id === selectedBarId) ?? null;
+
+  // Fetch matches + bar_matches when selected bar changes
   useEffect(() => {
     if (!bar) return;
     const supabase = createClient();
+    setSelectedMatchIds(new Set());
 
     Promise.all([
       fetch('/api/matches').then((r) => r.json()),
-      supabase
-        .from('bar_matches')
-        .select('match_id')
-        .eq('bar_id', bar.id),
+      supabase.from('bar_matches').select('match_id').eq('bar_id', bar.id),
     ]).then(([matchData, { data: barMatchData }]) => {
       setMatches(matchData.matches ?? []);
       setSelectedMatchIds(new Set((barMatchData ?? []).map((bm: any) => bm.match_id)));
     });
-  }, [bar]);
+  }, [bar?.id]);
 
   const toggleMatch = (matchId: string) => {
     setSelectedMatchIds((prev) => {
       const next = new Set(prev);
-      if (next.has(matchId)) next.delete(matchId);
-      else next.add(matchId);
+      next.has(matchId) ? next.delete(matchId) : next.add(matchId);
       return next;
     });
     setSaveSuccess(false);
@@ -95,14 +94,10 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
   const saveMatches = async () => {
     if (!bar) return;
     setSavingMatches(true);
-
     const supabase = createClient();
 
-    // Fetch current bar_matches
     const { data: current } = await supabase
-      .from('bar_matches')
-      .select('match_id')
-      .eq('bar_id', bar.id);
+      .from('bar_matches').select('match_id').eq('bar_id', bar.id);
 
     const currentIds = new Set((current ?? []).map((bm: any) => bm.match_id));
     const toAdd = Array.from(selectedMatchIds).filter((id) => !currentIds.has(id));
@@ -114,18 +109,53 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
       );
     }
     if (toRemove.length) {
-      await supabase
-        .from('bar_matches')
-        .delete()
-        .eq('bar_id', bar.id)
-        .in('match_id', toRemove);
+      await supabase.from('bar_matches').delete().eq('bar_id', bar.id).in('match_id', toRemove);
     }
 
     setSavingMatches(false);
     setSaveSuccess(true);
   };
 
-  if (authLoading || barLoading) {
+  const startFeaturedCheckout = async () => {
+    if (!bar) return;
+    setCheckingOut(true);
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barId: bar.id, locale }),
+      });
+      const { url } = await res.json();
+      if (url) window.location.href = url;
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
+  const matchLabel = (m: MatchRow) => {
+    const home = isFr ? (m.home_team_name_fr ?? m.home_team_placeholder ?? '?')
+                      : (m.home_team_name_en ?? m.home_team_placeholder ?? '?');
+    const away = isFr ? (m.away_team_name_fr ?? m.away_team_placeholder ?? '?')
+                      : (m.away_team_name_en ?? m.away_team_placeholder ?? '?');
+    const dt = new Date(m.kickoff_utc);
+    return {
+      teams: `${home} vs ${away}`,
+      date: dt.toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', { weekday: 'short', month: 'short', day: 'numeric' }),
+      time: dt.toLocaleTimeString(isFr ? 'fr-CA' : 'en-CA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }),
+    };
+  };
+
+  const matchesByDate = matches.reduce<Record<string, MatchRow[]>>((acc, m) => {
+    const date = new Date(m.kickoff_utc).toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', {
+      weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Toronto',
+    });
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(m);
+    return acc;
+  }, {});
+
+  // Loading state
+  if (authLoading || barsLoading) {
     return (
       <div className="container mx-auto px-4 py-10 max-w-3xl flex flex-col gap-6">
         <Skeleton className="h-8 w-48" />
@@ -137,8 +167,8 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
 
   if (!user) return null;
 
-  // No bar yet → prompt to register
-  if (!bar) {
+  // No bar yet
+  if (bars.length === 0) {
     return (
       <div className="container mx-auto px-4 py-10 max-w-3xl text-center">
         <div className="text-5xl mb-4">🍺</div>
@@ -160,217 +190,225 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
     );
   }
 
-  const startFeaturedCheckout = async () => {
-    if (!bar) return;
-    setCheckingOut(true);
-    try {
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ barId: bar.id, locale }),
-      });
-      const { url, error } = await res.json();
-      if (url) window.location.href = url;
-      else console.error('Checkout error:', error);
-    } finally {
-      setCheckingOut(false);
-    }
-  };
-
-  const matchLabel = (m: MatchRow) => {
-    const home = isFr
-      ? (m.home_team_name_fr ?? m.home_team_placeholder ?? '?')
-      : (m.home_team_name_en ?? m.home_team_placeholder ?? '?');
-    const away = isFr
-      ? (m.away_team_name_fr ?? m.away_team_placeholder ?? '?')
-      : (m.away_team_name_en ?? m.away_team_placeholder ?? '?');
-    const dt = new Date(m.kickoff_utc);
-    return {
-      teams: `${home} vs ${away}`,
-      date: dt.toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', { weekday: 'short', month: 'short', day: 'numeric' }),
-      time: dt.toLocaleTimeString(isFr ? 'fr-CA' : 'en-CA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }),
-    };
-  };
-
-  // Group matches by date
-  const matchesByDate = matches.reduce<Record<string, MatchRow[]>>((acc, m) => {
-    const date = new Date(m.kickoff_utc).toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', {
-      weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Toronto',
-    });
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(m);
-    return acc;
-  }, {});
-
   return (
     <div className="container mx-auto px-4 py-10 max-w-3xl flex flex-col gap-8">
-      {/* Featured payment success banner */}
+
+      {/* Featured success banner */}
       {showFeaturedSuccess && (
         <div className="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl px-4 py-3">
           <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
           <p className="text-sm font-medium text-green-800 dark:text-green-200">
-            {isFr
-              ? 'Paiement confirmé — votre bar est maintenant en vedette !'
-              : 'Payment confirmed — your bar is now featured!'}
+            {isFr ? 'Paiement confirmé — votre bar est maintenant en vedette !' : 'Payment confirmed — your bar is now featured!'}
           </p>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{bar.name}</h1>
-          <div className="flex items-center gap-1.5 mt-1 text-slate-500 dark:text-slate-400 text-sm">
-            <MapPin className="w-3.5 h-3.5" />
-            {bar.city}, {bar.province}
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {bar.is_featured && <Badge variant="featured">⭐ Featured</Badge>}
-          {bar.is_verified && <Badge variant="verified">✓ {isFr ? 'Vérifié' : 'Verified'}</Badge>}
-        </div>
-      </div>
+      {/* Bar selector */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400 shrink-0">
+          {isFr ? 'Gérer :' : 'Manage:'}
+        </p>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { icon: Eye, label: isFr ? 'Vues' : 'Views', value: '—' },
-          { icon: Star, label: isFr ? 'Note moy.' : 'Avg. rating', value: '—' },
-          { icon: BarChart3, label: isFr ? 'Matchs diffusés' : 'Matches showing', value: selectedMatchIds.size.toString() },
-        ].map(({ icon: Icon, label, value }) => (
-          <div key={label} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-center">
-            <Icon className="w-5 h-5 text-primary-700 dark:text-primary-400 mx-auto mb-1" />
-            <p className="text-xl font-bold text-slate-900 dark:text-white">{value}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+        {bars.length <= 4 ? (
+          // Tabs for ≤ 4 bars
+          <div className="flex flex-wrap gap-2">
+            {bars.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => { setSelectedBarId(b.id); setSaveSuccess(false); }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  b.id === selectedBarId
+                    ? 'bg-primary-700 text-white border-primary-700'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:border-primary-400'
+                }`}
+              >
+                {b.name}
+                {b.is_featured && ' ⭐'}
+              </button>
+            ))}
           </div>
-        ))}
-      </div>
+        ) : (
+          // Dropdown for > 4 bars
+          <div className="relative">
+            <select
+              value={selectedBarId ?? ''}
+              onChange={(e) => { setSelectedBarId(e.target.value); setSaveSuccess(false); }}
+              className="appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 pr-8 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {bars.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}{b.is_featured ? ' ⭐' : ''}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+        )}
 
-      {/* Public page link */}
-      <div className="flex items-center gap-3 bg-primary-50 dark:bg-primary-900/20 rounded-xl px-4 py-3 text-sm">
-        <CheckCircle2 className="w-4 h-4 text-primary-700 dark:text-primary-400 shrink-0" />
-        <span className="text-slate-700 dark:text-slate-300">
-          {isFr ? 'Votre page publique : ' : 'Your public page: '}
-        </span>
         <Link
-          href={`/${locale}/bar/${bar.slug}`}
-          className="text-primary-700 dark:text-primary-400 hover:underline font-medium flex items-center gap-1"
+          href={`/${locale}/bar/register`}
+          className="inline-flex items-center gap-1.5 text-sm text-primary-700 dark:text-primary-400 hover:underline font-medium"
         >
-          /bar/{bar.slug}
-          <ExternalLink className="w-3 h-3" />
+          <PlusCircle className="w-4 h-4" />
+          {isFr ? 'Ajouter un bar' : 'Add a bar'}
         </Link>
       </div>
 
-      {/* Featured upgrade */}
-      {bar.is_featured ? (
-        <div className="flex items-start gap-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
-          <Sparkles className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="font-semibold text-amber-900 dark:text-amber-200 text-sm">
-              {isFr ? 'Votre bar est en vedette' : 'Your bar is featured'}
-            </p>
-            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-              {isFr ? 'Actif jusqu\'au ' : 'Active until '}
-              {bar.featured_until
-                ? new Date(bar.featured_until).toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
-                : '—'}
-            </p>
-          </div>
-          <Badge variant="featured">⭐ Featured</Badge>
-        </div>
-      ) : (
-        <div className="bg-gradient-to-br from-primary-50 to-indigo-50 dark:from-primary-900/20 dark:to-indigo-900/20 border border-primary-200 dark:border-primary-800 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-primary-700 dark:text-primary-400" />
-              <span className="font-bold text-slate-900 dark:text-white text-sm">
-                {isFr ? 'Passer en vedette' : 'Get featured'}
-              </span>
-              <span className="text-xs bg-primary-700 text-white rounded-full px-2 py-0.5 font-semibold">49 $/mois</span>
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              {isFr
-                ? 'Apparaissez en tête des résultats de recherche. Annulez à tout moment.'
-                : 'Appear at the top of search results. Cancel anytime.'}
-            </p>
-          </div>
-          <Button size="sm" onClick={startFeaturedCheckout} disabled={checkingOut} className="shrink-0">
-            {checkingOut && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-            <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-            {isFr ? 'Mettre en avant' : 'Get featured'}
-          </Button>
-        </div>
-      )}
-
-      {/* Match selection */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-            {isFr ? 'Matchs que vous diffusez' : 'Matches you are showing'}
-          </h2>
-          <div className="flex items-center gap-2">
-            {saveSuccess && (
-              <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {isFr ? 'Enregistré' : 'Saved'}
-              </span>
-            )}
-            <Button size="sm" onClick={saveMatches} disabled={savingMatches}>
-              {savingMatches && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-              {isFr ? 'Enregistrer' : 'Save'}
-            </Button>
-          </div>
-        </div>
-
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-          {isFr
-            ? `${selectedMatchIds.size} match${selectedMatchIds.size !== 1 ? 's' : ''} sélectionné${selectedMatchIds.size !== 1 ? 's' : ''}`
-            : `${selectedMatchIds.size} match${selectedMatchIds.size !== 1 ? 'es' : ''} selected`}
-        </p>
-
-        <div className="flex flex-col gap-6">
-          {Object.entries(matchesByDate).map(([date, dayMatches]) => (
-            <div key={date}>
-              <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 capitalize">
-                {date}
-              </h3>
-              <div className="flex flex-col gap-1.5">
-                {dayMatches.map((m) => {
-                  const { teams, time } = matchLabel(m);
-                  const selected = selectedMatchIds.has(m.id);
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => toggleMatch(m.id)}
-                      className={`flex items-center justify-between rounded-xl px-4 py-3 text-left border transition-colors ${
-                        selected
-                          ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-300 dark:border-primary-700'
-                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <div>
-                        <p className={`text-sm font-medium ${selected ? 'text-primary-700 dark:text-primary-300' : 'text-slate-900 dark:text-white'}`}>
-                          {teams}
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          {time} ET · {m.venue_city}
-                        </p>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        selected
-                          ? 'bg-primary-700 border-primary-700'
-                          : 'border-slate-300 dark:border-slate-600'
-                      }`}>
-                        {selected && <CheckCircle2 className="w-3 h-3 text-white" />}
-                      </div>
-                    </button>
-                  );
-                })}
+      {bar && (
+        <>
+          {/* Header */}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{bar.name}</h1>
+              <div className="flex items-center gap-1.5 mt-1 text-slate-500 dark:text-slate-400 text-sm">
+                <MapPin className="w-3.5 h-3.5" />
+                {bar.address}, {bar.city}
               </div>
             </div>
-          ))}
-        </div>
-      </section>
+            <div className="flex gap-2 flex-wrap justify-end">
+              {bar.is_featured && <Badge variant="featured">⭐ Featured</Badge>}
+              {bar.is_verified && <Badge variant="verified">✓ {isFr ? 'Vérifié' : 'Verified'}</Badge>}
+            </div>
+          </div>
+
+          {/* Quick stats */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { icon: Eye, label: isFr ? 'Vues' : 'Views', value: '—' },
+              { icon: Star, label: isFr ? 'Note moy.' : 'Avg. rating', value: '—' },
+              { icon: BarChart3, label: isFr ? 'Matchs diffusés' : 'Matches showing', value: selectedMatchIds.size.toString() },
+            ].map(({ icon: Icon, label, value }) => (
+              <div key={label} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-center">
+                <Icon className="w-5 h-5 text-primary-700 dark:text-primary-400 mx-auto mb-1" />
+                <p className="text-xl font-bold text-slate-900 dark:text-white">{value}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Public page link */}
+          <div className="flex items-center gap-3 bg-primary-50 dark:bg-primary-900/20 rounded-xl px-4 py-3 text-sm">
+            <CheckCircle2 className="w-4 h-4 text-primary-700 dark:text-primary-400 shrink-0" />
+            <span className="text-slate-700 dark:text-slate-300">
+              {isFr ? 'Page publique : ' : 'Public page: '}
+            </span>
+            <Link
+              href={`/${locale}/bar/${bar.slug}`}
+              className="text-primary-700 dark:text-primary-400 hover:underline font-medium flex items-center gap-1"
+            >
+              /bar/{bar.slug}
+              <ExternalLink className="w-3 h-3" />
+            </Link>
+          </div>
+
+          {/* Featured upgrade */}
+          {bar.is_featured ? (
+            <div className="flex items-start gap-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
+              <Sparkles className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-amber-900 dark:text-amber-200 text-sm">
+                  {isFr ? 'Ce bar est en vedette' : 'This bar is featured'}
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                  {isFr ? 'Actif jusqu\'au ' : 'Active until '}
+                  {bar.featured_until
+                    ? new Date(bar.featured_until).toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
+                    : '—'}
+                </p>
+              </div>
+              <Badge variant="featured">⭐ Featured</Badge>
+            </div>
+          ) : (
+            <div className="bg-gradient-to-br from-primary-50 to-indigo-50 dark:from-primary-900/20 dark:to-indigo-900/20 border border-primary-200 dark:border-primary-800 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles className="w-4 h-4 text-primary-700 dark:text-primary-400" />
+                  <span className="font-bold text-slate-900 dark:text-white text-sm">
+                    {isFr ? 'Passer en vedette' : 'Get featured'}
+                  </span>
+                  <span className="text-xs bg-primary-700 text-white rounded-full px-2 py-0.5 font-semibold">49 $/mois</span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  {isFr
+                    ? 'Apparaissez en tête des résultats de recherche. Annulez à tout moment.'
+                    : 'Appear at the top of search results. Cancel anytime.'}
+                </p>
+              </div>
+              <Button size="sm" onClick={startFeaturedCheckout} disabled={checkingOut} className="shrink-0">
+                {checkingOut && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                {isFr ? 'Mettre en avant' : 'Get featured'}
+              </Button>
+            </div>
+          )}
+
+          {/* Match selection */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                {isFr ? 'Matchs que vous diffusez' : 'Matches you are showing'}
+              </h2>
+              <div className="flex items-center gap-2">
+                {saveSuccess && (
+                  <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {isFr ? 'Enregistré' : 'Saved'}
+                  </span>
+                )}
+                <Button size="sm" onClick={saveMatches} disabled={savingMatches}>
+                  {savingMatches && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                  {isFr ? 'Enregistrer' : 'Save'}
+                </Button>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+              {selectedMatchIds.size} {isFr
+                ? `match${selectedMatchIds.size !== 1 ? 's' : ''} sélectionné${selectedMatchIds.size !== 1 ? 's' : ''}`
+                : `match${selectedMatchIds.size !== 1 ? 'es' : ''} selected`}
+            </p>
+
+            <div className="flex flex-col gap-6">
+              {Object.entries(matchesByDate).map(([date, dayMatches]) => (
+                <div key={date}>
+                  <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 capitalize">
+                    {date}
+                  </h3>
+                  <div className="flex flex-col gap-1.5">
+                    {dayMatches.map((m) => {
+                      const { teams, time } = matchLabel(m);
+                      const selected = selectedMatchIds.has(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => toggleMatch(m.id)}
+                          className={`flex items-center justify-between rounded-xl px-4 py-3 text-left border transition-colors ${
+                            selected
+                              ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-300 dark:border-primary-700'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                          }`}
+                        >
+                          <div>
+                            <p className={`text-sm font-medium ${selected ? 'text-primary-700 dark:text-primary-300' : 'text-slate-900 dark:text-white'}`}>
+                              {teams}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              {time} ET · {m.venue_city}
+                            </p>
+                          </div>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                            selected ? 'bg-primary-700 border-primary-700' : 'border-slate-300 dark:border-slate-600'
+                          }`}>
+                            {selected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
 
       {/* Sign out */}
       <div className="border-t border-slate-200 dark:border-slate-700 pt-6">

@@ -160,11 +160,6 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
 
       const data = await res.json();
       if (!res.ok) {
-        if (res.status === 409) {
-          // Bar already exists — go to dashboard
-          router.push(`/${locale}/bar/dashboard`);
-          return;
-        }
         setSubmitError(data.error?.message ?? (isFr ? 'Une erreur est survenue' : 'An error occurred'));
         return;
       }
