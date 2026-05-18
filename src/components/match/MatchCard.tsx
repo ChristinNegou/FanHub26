@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { MapPin, CalendarPlus, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { formatMatchTime } from '@/lib/utils/dates';
+import { getFlagUrl } from '@/lib/utils/flags';
 
 export interface CalendarMatch {
   id: string;
@@ -41,6 +42,26 @@ const STAGE_LABELS: Record<string, { fr: string; en: string }> = {
 
 function toIcalDate(utc: string) {
   return new Date(utc).toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+}
+
+function TeamFlag({ code }: { code: string | null }) {
+  const url = getFlagUrl(code);
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={code ?? ''}
+        width={28}
+        height={21}
+        className="rounded object-cover border border-slate-200 dark:border-slate-600 shrink-0"
+      />
+    );
+  }
+  return (
+    <div className="w-7 h-5 rounded bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-xs shrink-0">
+      ?
+    </div>
+  );
 }
 
 interface MatchCardProps {
@@ -101,22 +122,14 @@ export function MatchCard({ match: m, timezone, locale }: MatchCardProps) {
         <div className="flex-1 flex flex-col gap-2">
           {/* Home */}
           <div className="flex items-center gap-2.5">
-            {m.home_team_flag ? (
-              <img src={m.home_team_flag} alt={m.home_team_code ?? ''} className="w-7 h-7 rounded-full object-cover border border-slate-200 dark:border-slate-600" />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-xs">?</div>
-            )}
+            <TeamFlag code={m.home_team_code} />
             <span className={`font-semibold text-sm ${isFinished ? 'text-slate-500 dark:text-slate-400' : 'text-slate-900 dark:text-white'}`}>
               {homeName}
             </span>
           </div>
           {/* Away */}
           <div className="flex items-center gap-2.5">
-            {m.away_team_flag ? (
-              <img src={m.away_team_flag} alt={m.away_team_code ?? ''} className="w-7 h-7 rounded-full object-cover border border-slate-200 dark:border-slate-600" />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-xs">?</div>
-            )}
+            <TeamFlag code={m.away_team_code} />
             <span className={`font-semibold text-sm ${isFinished ? 'text-slate-500 dark:text-slate-400' : 'text-slate-900 dark:text-white'}`}>
               {awayName}
             </span>

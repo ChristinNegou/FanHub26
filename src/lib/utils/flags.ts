@@ -1,0 +1,27 @@
+const FIFA_TO_ISO2: Record<string, string> = {
+  ARG: 'ar', ALG: 'dz', AUS: 'au', AUT: 'at',
+  BEL: 'be', BIH: 'ba', BRA: 'br',
+  CAN: 'ca', CIV: 'ci', COD: 'cd', COL: 'co', CPV: 'cv', CRO: 'hr', CUW: 'cw', CZE: 'cz',
+  ECU: 'ec', EGY: 'eg', ENG: 'gb-eng', ESP: 'es',
+  FRA: 'fr',
+  GER: 'de', GHA: 'gh',
+  HAI: 'ht',
+  IRN: 'ir', IRQ: 'iq',
+  JOR: 'jo', JPN: 'jp',
+  KOR: 'kr', KSA: 'sa',
+  MAR: 'ma', MEX: 'mx',
+  NED: 'nl', NOR: 'no', NZL: 'nz',
+  PAN: 'pa', PAR: 'py', POR: 'pt',
+  QAT: 'qa',
+  RSA: 'za',
+  SCO: 'gb-sct', SEN: 'sn', SUI: 'ch', SWE: 'se',
+  TUN: 'tn', TUR: 'tr',
+  URU: 'uy', USA: 'us', UZB: 'uz',
+};
+
+export function getFlagUrl(fifaCode: string | null | undefined): string | null {
+  if (!fifaCode) return null;
+  const iso2 = FIFA_TO_ISO2[fifaCode.toUpperCase()];
+  if (!iso2) return null;
+  return `https://flagcdn.com/w40/${iso2}.png`;
+}
