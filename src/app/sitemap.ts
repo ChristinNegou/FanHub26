@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 import { createClient } from '@/lib/supabase/server';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://fanhub26.ca';
+const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://fan-hub26.vercel.app').replace(/\/$/, '');
 const locales = ['fr', 'en'];
 
 function staticRoutes(): MetadataRoute.Sitemap {
@@ -22,22 +22,27 @@ function staticRoutes(): MetadataRoute.Sitemap {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const supabase = createClient();
-  const { data: bars } = await supabase
-    .from('bars')
-    .select('slug, updated_at')
-    .eq('is_active', true);
+  let barEntries: MetadataRoute.Sitemap = [];
 
-  const barEntries: MetadataRoute.Sitemap = [];
-  for (const bar of bars ?? []) {
-    for (const locale of locales) {
-      barEntries.push({
-        url: `${BASE_URL}/${locale}/bar/${bar.slug}`,
-        lastModified: new Date(bar.updated_at),
-        changeFrequency: 'weekly',
-        priority: 0.8,
-      });
+  try {
+    const supabase = createClient();
+    const { data: bars } = await supabase
+      .from('bars')
+      .select('slug, updated_at')
+      .eq('is_active', true);
+
+    for (const bar of bars ?? []) {
+      for (const locale of locales) {
+        barEntries.push({
+          url: `${BASE_URL}/${locale}/bar/${bar.slug}`,
+          lastModified: new Date(bar.updated_at),
+          changeFrequency: 'weekly',
+          priority: 0.8,
+        });
+      }
     }
+  } catch {
+    // DB unavailable — return static routes only
   }
 
   return [...staticRoutes(), ...barEntries];
