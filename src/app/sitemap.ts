@@ -1,5 +1,6 @@
 import { MetadataRoute } from 'next';
 import { createClient } from '@/lib/supabase/server';
+import { cities } from '@/data/cities';
 
 const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://fan-hub26.vercel.app').replace(/\/$/, '');
 const locales = ['fr', 'en'];
@@ -15,6 +16,14 @@ function staticRoutes(): MetadataRoute.Sitemap {
         lastModified: new Date(),
         changeFrequency: path === '' ? 'daily' : 'weekly',
         priority: path === '' ? 1 : path === '/watch' ? 0.9 : 0.7,
+      });
+    }
+    for (const city of cities) {
+      entries.push({
+        url: `${BASE_URL}/${locale}/guide/${city.slug}`,
+        lastModified: new Date(),
+        changeFrequency: 'monthly',
+        priority: 0.6,
       });
     }
   }
