@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  BarChart3, MapPin, Star, Eye, Loader2,
+  BarChart3, MapPin, Star, Users, Loader2,
   CheckCircle2, PlusCircle, ExternalLink, Sparkles, ChevronDown,
-  Pencil, Trash2, X, AlertTriangle,
+  Pencil, Trash2, X, AlertTriangle, ShieldCheck, Clock,
 } from 'lucide-react';
 import { MAPBOX_TOKEN } from '@/lib/mapbox/config';
 import { Badge } from '@/components/ui/Badge';
@@ -15,6 +15,14 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { createClient } from '@/lib/supabase/client';
 import type { Bar } from '@/lib/types/bar';
+
+interface ReviewRow {
+  rating: number;
+  comment: string | null;
+  atmosphere_rating: number | null;
+  sound_quality_rating: number | null;
+  created_at: string;
+}
 
 interface MatchRow {
   id: string;
@@ -44,6 +52,9 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
   const [savingMatches, setSavingMatches] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+
+  // Reviews state
+  const [reviews, setReviews] = useState<ReviewRow[]>([]);
 
   // Edit state
   const [editing, setEditing] = useState(false);
@@ -93,6 +104,19 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
       setMatches(matchData.matches ?? []);
       setSelectedMatchIds(new Set((barMatchData ?? []).map((bm: any) => bm.match_id)));
     });
+  }, [bar?.id]);
+
+  // Fetch reviews for the selected bar
+  useEffect(() => {
+    if (!bar) return;
+    const supabase = createClient();
+    supabase
+      .from('bar_reviews')
+      .select('rating, comment, atmosphere_rating, sound_quality_rating, created_at')
+      .eq('bar_id', bar.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+      .then(({ data }) => setReviews(data ?? []));
   }, [bar?.id]);
 
   // Re-fetch bars after Stripe redirect to pick up is_featured update from webhook
@@ -498,19 +522,48 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
           )}
 
           {/* Quick stats */}
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { icon: Eye, label: isFr ? 'Vues' : 'Views', value: '—' },
-              { icon: Star, label: isFr ? 'Note moy.' : 'Avg. rating', value: '—' },
-              { icon: BarChart3, label: isFr ? 'Matchs diffusés' : 'Matches showing', value: selectedMatchIds.size.toString() },
-            ].map(({ icon: Icon, label, value }) => (
-              <div key={label} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-center">
-                <Icon className="w-5 h-5 text-primary-700 dark:text-primary-400 mx-auto mb-1" />
-                <p className="text-xl font-bold text-slate-900 dark:text-white">{value}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+          {(() => {
+            const avgRating = reviews.length
+              ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
+              : null;
+            const stats = [
+              {
+                icon: Star,
+                label: isFr ? 'Note moyenne' : 'Avg. rating',
+                value: avgRating !== null ? `${avgRating.toFixed(1)} / 5` : '—',
+                sub: reviews.length > 0 ? `${reviews.length} ${isFr ? 'avis' : 'reviews'}` : (isFr ? 'Aucun avis' : 'No reviews yet'),
+                color: 'text-amber-500',
+              },
+              {
+                icon: Users,
+                label: isFr ? 'Avis reçus' : 'Reviews received',
+                value: reviews.length.toString(),
+                sub: reviews.length > 0
+                  ? `${isFr ? 'Dernier : ' : 'Latest: '}${new Date(reviews[0].created_at).toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', { month: 'short', day: 'numeric' })}`
+                  : '—',
+                color: 'text-primary-600',
+              },
+              {
+                icon: BarChart3,
+                label: isFr ? 'Matchs diffusés' : 'Matches showing',
+                value: selectedMatchIds.size.toString(),
+                sub: isFr ? 'matchs sélectionnés' : 'matches selected',
+                color: 'text-green-600',
+              },
+            ];
+            return (
+              <div className="grid grid-cols-3 gap-4">
+                {stats.map(({ icon: Icon, label, value, sub, color }) => (
+                  <div key={label} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-center">
+                    <Icon className={`w-5 h-5 ${color} mx-auto mb-1`} />
+                    <p className="text-xl font-bold text-slate-900 dark:text-white">{value}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+                    {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           {/* Public page link */}
           <div className="flex items-center gap-3 bg-primary-50 dark:bg-primary-900/20 rounded-xl px-4 py-3 text-sm">
@@ -529,21 +582,70 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
 
           {/* Featured upgrade */}
           {bar.is_featured ? (
-            <div className="flex items-start gap-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
-              <Sparkles className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-semibold text-amber-900 dark:text-amber-200 text-sm">
-                  {isFr ? 'Ce bar est en vedette' : 'This bar is featured'}
-                </p>
-                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                  {isFr ? 'Actif jusqu\'au ' : 'Active until '}
-                  {bar.featured_until
-                    ? new Date(bar.featured_until).toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
-                    : '—'}
-                </p>
-              </div>
-              <Badge variant="featured">⭐ Featured</Badge>
-            </div>
+            (() => {
+              const expiry = bar.featured_until ? new Date(bar.featured_until) : null;
+              const now = new Date();
+              const isExpired = expiry && expiry < now;
+              const daysLeft = expiry ? Math.ceil((expiry.getTime() - now.getTime()) / 86_400_000) : null;
+              const isExpiringSoon = daysLeft !== null && daysLeft <= 7 && !isExpired;
+
+              return (
+                <div className={`flex flex-col gap-3 border rounded-xl p-4 ${
+                  isExpired
+                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                    : isExpiringSoon
+                    ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-700'
+                    : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    {isExpired ? (
+                      <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    ) : (
+                      <Sparkles className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                    )}
+                    <div className="flex-1">
+                      <p className={`font-semibold text-sm ${isExpired ? 'text-red-800 dark:text-red-200' : 'text-amber-900 dark:text-amber-200'}`}>
+                        {isExpired
+                          ? (isFr ? 'Abonnement expiré' : 'Subscription expired')
+                          : (isFr ? 'Bar en vedette ✓' : 'Featured bar ✓')}
+                      </p>
+                      {expiry && (
+                        <p className={`text-xs mt-0.5 ${isExpired ? 'text-red-600 dark:text-red-400' : isExpiringSoon ? 'text-orange-700 dark:text-orange-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                          {isExpired
+                            ? (isFr ? `Expiré le ${expiry.toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', { month: 'long', day: 'numeric', year: 'numeric' })}` : `Expired on ${expiry.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })}`)
+                            : isExpiringSoon
+                            ? (isFr ? `⚠ Expire dans ${daysLeft} jour${daysLeft! > 1 ? 's' : ''}` : `⚠ Expires in ${daysLeft} day${daysLeft! > 1 ? 's' : ''}`)
+                            : (isFr ? `Actif jusqu'au ${expiry.toLocaleDateString('fr-CA', { month: 'long', day: 'numeric', year: 'numeric' })}` : `Active until ${expiry.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })}`)}
+                        </p>
+                      )}
+                    </div>
+                    {!isExpired && <Badge variant="featured">⭐ Featured</Badge>}
+                  </div>
+
+                  {/* Verification confirmation */}
+                  {!isExpired && (
+                    <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/40 rounded-lg px-3 py-2">
+                      <ShieldCheck className="w-4 h-4 text-green-600 shrink-0" />
+                      <p className="text-xs text-slate-700 dark:text-slate-300">
+                        {isFr
+                          ? 'Votre bar apparaît en tête des résultats du Watch Finder dans votre ville.'
+                          : 'Your bar appears at the top of Watch Finder results in your city.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {(isExpired || isExpiringSoon) && (
+                    <Button size="sm" onClick={startFeaturedCheckout} disabled={checkingOut} className="self-start">
+                      {checkingOut && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                      <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                      {isExpired
+                        ? (isFr ? 'Renouveler — 49 $/mois' : 'Renew — $49/month')
+                        : (isFr ? 'Renouveler maintenant' : 'Renew now')}
+                    </Button>
+                  )}
+                </div>
+              );
+            })()
           ) : (
             <div className="bg-gradient-to-br from-primary-50 to-indigo-50 dark:from-primary-900/20 dark:to-indigo-900/20 border border-primary-200 dark:border-primary-800 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex-1">
@@ -566,6 +668,55 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
                 {isFr ? 'Mettre en avant' : 'Get featured'}
               </Button>
             </div>
+          )}
+
+          {/* Latest reviews */}
+          {reviews.length > 0 && (
+            <section>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-500" />
+                {isFr ? 'Derniers avis clients' : 'Latest customer reviews'}
+              </h2>
+              <div className="flex flex-col gap-3">
+                {reviews.slice(0, 5).map((review, i) => (
+                  <div key={i} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: 5 }).map((_, j) => (
+                          <Star
+                            key={j}
+                            className={`w-3.5 h-3.5 ${j < review.rating ? 'text-amber-500 fill-current' : 'text-slate-300'}`}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-slate-400">
+                        {review.atmosphere_rating && (
+                          <span>{isFr ? 'Ambiance' : 'Atmosphere'}: {review.atmosphere_rating}/5</span>
+                        )}
+                        {review.sound_quality_rating && (
+                          <span>{isFr ? 'Son' : 'Sound'}: {review.sound_quality_rating}/5</span>
+                        )}
+                        <span className="flex items-center gap-0.5">
+                          <Clock className="w-3 h-3" />
+                          {new Date(review.created_at).toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </div>
+                    </div>
+                    {review.comment && (
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">{review.comment}</p>
+                    )}
+                    {!review.comment && (
+                      <p className="text-xs text-slate-400 italic mt-1">{isFr ? 'Sans commentaire' : 'No comment'}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {reviews.length > 5 && (
+                <p className="text-xs text-slate-400 mt-2 text-right">
+                  {isFr ? `+${reviews.length - 5} autres avis` : `+${reviews.length - 5} more reviews`}
+                </p>
+              )}
+            </section>
           )}
 
           {/* Match selection */}
