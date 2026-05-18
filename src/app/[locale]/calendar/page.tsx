@@ -1,16 +1,103 @@
 import type { Metadata } from 'next';
+import { createClient } from '@/lib/supabase/server';
+import { CalendarClient } from '@/components/match/CalendarClient';
+import teamsData from '@/data/teams.json';
 
-export const metadata: Metadata = {
-  title: 'Calendrier des matchs',
-  description: 'Tous les 104 matchs de la Coupe du Monde 2026 avec horaires en fuseau horaire canadien.',
-};
+export async function generateMetadata({
+  params: { locale },
+}: {
+  params: { locale: string };
+}): Promise<Metadata> {
+  const isFr = locale === 'fr';
+  return {
+    title: isFr
+      ? 'Calendrier des 104 matchs — Coupe du Monde 2026 | FanHub26'
+      : '104-Match Schedule — 2026 World Cup | FanHub26',
+    description: isFr
+      ? 'Tous les matchs de la Coupe du Monde FIFA 2026 avec horaires en heure de l\'Est, du Centre, des Rocheuses et du Pacifique. Filtrez par équipe, ville ou phase.'
+      : 'All 2026 FIFA World Cup matches with Eastern, Central, Mountain and Pacific times. Filter by team, city, or stage.',
+  };
+}
 
-export default function CalendarPage({ params: { locale } }: { params: { locale: string } }) {
+export default async function CalendarPage({
+  params: { locale },
+}: {
+  params: { locale: string };
+}) {
+  const isFr = locale === 'fr';
+  const supabase = createClient();
+
+  // Fetch all matches with team + venue joins via the view
+  // For finished matches too, query directly
+  const { data: raw } = await supabase
+    .from('upcoming_matches')
+    .select('*')
+    .order('kickoff_utc', { ascending: true });
+
+  // upcoming_matches filters out 'finished' — supplement with a full fetch
+  const { data: allMatches } = await supabase
+    .from('matches')
+    .select(`
+      id, match_number, stage, group_letter,
+      home_team_id, away_team_id,
+      home_team_placeholder, away_team_placeholder,
+      kickoff_utc, status,
+      home_team:teams!matches_home_team_id_fkey(name_fr, name_en, code, flag_url),
+      away_team:teams!matches_away_team_id_fkey(name_fr, name_en, code, flag_url),
+      venue:venues(name, city)
+    `)
+    .order('kickoff_utc', { ascending: true });
+
+  // Merge: prefer upcoming_matches data (has bars_showing), fallback to allMatches
+  const upcomingMap = new Map((raw ?? []).map((m: any) => [m.id, m]));
+
+  const matches = (allMatches ?? []).map((m: any) => {
+    const upcoming = upcomingMap.get(m.id);
+    return {
+      id: m.id,
+      match_number: m.match_number,
+      stage: m.stage,
+      group_letter: m.group_letter,
+      home_team_id: m.home_team_id,
+      away_team_id: m.away_team_id,
+      home_team_name_fr: m.home_team?.name_fr ?? null,
+      home_team_name_en: m.home_team?.name_en ?? null,
+      home_team_code: m.home_team?.code ?? null,
+      home_team_flag: m.home_team?.flag_url ?? null,
+      home_team_placeholder: m.home_team_placeholder,
+      away_team_name_fr: m.away_team?.name_fr ?? null,
+      away_team_name_en: m.away_team?.name_en ?? null,
+      away_team_code: m.away_team?.code ?? null,
+      away_team_flag: m.away_team?.flag_url ?? null,
+      away_team_placeholder: m.away_team_placeholder,
+      kickoff_utc: m.kickoff_utc,
+      venue_name: m.venue?.name ?? '',
+      venue_city: m.venue?.city ?? '',
+      status: m.status,
+      bars_showing: upcoming?.bars_showing ?? 0,
+    };
+  });
+
+  const teams = teamsData.teams
+    .map((t) => ({ code: t.code, name_fr: t.name_fr, name_en: t.name_en }))
+    .sort((a, b) =>
+      (isFr ? a.name_fr : a.name_en).localeCompare(isFr ? b.name_fr : b.name_en, isFr ? 'fr' : 'en'),
+    );
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">
-        {locale === 'fr' ? 'Calendrier des matchs' : 'Match calendar'}
-      </h1>
+    <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
+          {isFr ? 'Calendrier des matchs' : 'Match schedule'}
+        </h1>
+        <p className="text-slate-500 dark:text-slate-400 text-sm">
+          {isFr
+            ? '104 matchs · du 11 juin au 19 juillet 2026'
+            : '104 matches · June 11 to July 19, 2026'}
+        </p>
+      </div>
+
+      <CalendarClient matches={matches} teams={teams} locale={locale} />
     </div>
   );
 }
