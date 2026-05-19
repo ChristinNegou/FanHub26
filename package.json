@@ -14,30 +14,31 @@
     "seed:all": "npm run seed:teams && npm run seed:venues && npm run seed:matches"
   },
   "dependencies": {
+    "@stripe/stripe-js": "^4.0.0",
+    "@supabase/ssr": "^0.5.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.436.0",
+    "mapbox-gl": "^3.6.0",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "@supabase/supabase-js": "^2.45.0",
-    "@supabase/ssr": "^0.5.0",
-    "mapbox-gl": "^3.6.0",
+    "resend": "^6.12.3",
     "stripe": "^16.0.0",
-    "@stripe/stripe-js": "^4.0.0",
-    "zod": "^3.23.0",
-    "lucide-react": "^0.436.0",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.2"
+    "tailwind-merge": "^2.5.2",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/mapbox-gl": "^3.4.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "@types/mapbox-gl": "^3.4.0",
-    "typescript": "^5",
-    "tailwindcss": "^3.4.0",
     "autoprefixer": "^10.4.0",
-    "postcss": "^8.4.0",
     "eslint": "^8",
     "eslint-config-next": "14.2.0",
-    "tsx": "^4.19.0"
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5"
   }
 }
