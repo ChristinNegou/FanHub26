@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   BarChart3, MapPin, Star, Users, Loader2,
   CheckCircle2, PlusCircle, ExternalLink, Sparkles, ChevronDown,
-  Pencil, Trash2, X, AlertTriangle, ShieldCheck, Clock,
+  Pencil, Trash2, X, AlertTriangle, ShieldCheck, Clock, ChevronUp,
 } from 'lucide-react';
 import { MAPBOX_TOKEN } from '@/lib/mapbox/config';
 import { Badge } from '@/components/ui/Badge';
@@ -14,7 +14,34 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { createClient } from '@/lib/supabase/client';
+import { PhotoGalleryEditor } from '@/components/bar/PhotoGalleryEditor';
 import type { Bar } from '@/lib/types/bar';
+
+const PROVINCES = [
+  { value: 'QC', label: 'Québec' }, { value: 'ON', label: 'Ontario' },
+  { value: 'BC', label: 'Colombie-Britannique' }, { value: 'AB', label: 'Alberta' },
+  { value: 'MB', label: 'Manitoba' }, { value: 'SK', label: 'Saskatchewan' },
+  { value: 'NS', label: 'Nouvelle-Écosse' }, { value: 'NB', label: 'Nouveau-Brunswick' },
+  { value: 'NL', label: 'Terre-Neuve-et-Labrador' }, { value: 'PE', label: 'Î.-P.-É.' },
+  { value: 'YT', label: 'Yukon' }, { value: 'NT', label: 'T.N.-O.' }, { value: 'NU', label: 'Nunavut' },
+];
+
+const ATMOSPHERES = [
+  { value: 'sports_bar', label: 'Bar sportif' },
+  { value: 'pub', label: 'Pub' },
+  { value: 'lively', label: 'Festif / animé' },
+  { value: 'chill', label: 'Décontracté' },
+];
+
+interface EditForm {
+  name: string; phone: string; website: string; instagram: string;
+  address: string; city: string; province: string; postal_code: string;
+  latitude: number; longitude: number;
+  has_sound: boolean; has_projector: boolean; has_outdoor: boolean; has_food: boolean;
+  num_screens: number; capacity: string; atmosphere: string;
+  description_fr: string; description_en: string;
+  photo_urls: string[]; logo_url: string | null;
+}
 
 interface ReviewRow {
   rating: number;
@@ -58,10 +85,18 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
 
   // Edit state
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', address: '', city: '', province: 'QC', postal_code: '', latitude: 0, longitude: 0 });
+  const [editSection, setEditSection] = useState<'basic' | 'location' | 'features' | 'descriptions' | 'photos'>('basic');
+  const [editForm, setEditForm] = useState<EditForm>({
+    name: '', phone: '', website: '', instagram: '',
+    address: '', city: '', province: 'QC', postal_code: '', latitude: 0, longitude: 0,
+    has_sound: false, has_projector: false, has_outdoor: false, has_food: false,
+    num_screens: 1, capacity: '', atmosphere: '', description_fr: '', description_en: '',
+    photo_urls: [], logo_url: null,
+  });
   const [editGeocoded, setEditGeocoded] = useState(true);
   const [editGeocoding, setEditGeocoding] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Delete state
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -138,14 +173,32 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
     if (!bar) return;
     setEditForm({
       name: bar.name,
+      phone: bar.phone ?? '',
+      website: bar.website ?? '',
+      instagram: bar.instagram ?? '',
       address: bar.address,
       city: bar.city,
       province: bar.province,
       postal_code: bar.postal_code ?? '',
       latitude: bar.latitude,
       longitude: bar.longitude,
+      has_sound: bar.has_sound,
+      has_projector: bar.has_projector,
+      has_outdoor: bar.has_outdoor,
+      has_food: bar.has_food,
+      num_screens: bar.num_screens,
+      capacity: bar.capacity?.toString() ?? '',
+      atmosphere: bar.atmosphere ?? '',
+      description_fr: bar.description_fr ?? '',
+      description_en: bar.description_en ?? '',
+      photo_urls: bar.cover_image_url
+        ? [bar.cover_image_url, ...(bar.gallery_images ?? [])]
+        : (bar.gallery_images ?? []),
+      logo_url: bar.logo_url ?? null,
     });
     setEditGeocoded(true);
+    setEditError(null);
+    setEditSection('basic');
     setEditing(true);
   };
 
@@ -172,15 +225,42 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
   const saveEdit = async () => {
     if (!bar || !editGeocoded) return;
     setEditSaving(true);
+    setEditError(null);
     const res = await fetch(`/api/bars/${bar.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editForm),
+      body: JSON.stringify({
+        name: editForm.name,
+        phone: editForm.phone || null,
+        website: editForm.website || null,
+        instagram: editForm.instagram || null,
+        address: editForm.address,
+        city: editForm.city,
+        province: editForm.province,
+        postal_code: editForm.postal_code || null,
+        latitude: editForm.latitude,
+        longitude: editForm.longitude,
+        has_sound: editForm.has_sound,
+        has_projector: editForm.has_projector,
+        has_outdoor: editForm.has_outdoor,
+        has_food: editForm.has_food,
+        num_screens: editForm.num_screens,
+        capacity: editForm.capacity ? parseInt(editForm.capacity) : null,
+        atmosphere: editForm.atmosphere || null,
+        description_fr: editForm.description_fr || null,
+        description_en: editForm.description_en || null,
+        cover_image_url: editForm.photo_urls[0] ?? null,
+        gallery_images: editForm.photo_urls.slice(1),
+        logo_url: editForm.logo_url,
+      }),
     });
     if (res.ok) {
       const { bar: updated } = await res.json();
       setBars((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
       setEditing(false);
+    } else {
+      const d = await res.json();
+      setEditError(d.error?.message ?? (isFr ? 'Erreur lors de la sauvegarde' : 'Save error'));
     }
     setEditSaving(false);
   };
@@ -399,95 +479,195 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
             </div>
           </div>
 
-          {/* Edit form */}
-          {editing && (
-            <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-5 flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
-                  {isFr ? 'Modifier les infos du bar' : 'Edit bar info'}
-                </h2>
-                <button onClick={() => setEditing(false)} className="text-slate-400 hover:text-slate-600">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+          {/* Edit form — full accordion */}
+          {editing && (() => {
+            const ef = editForm;
+            const setEf = (patch: Partial<EditForm>) => setEditForm((f) => ({ ...f, ...patch }));
+            const inputCls = 'rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 w-full';
+            const labelCls = 'text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block';
+            const sections: { key: typeof editSection; label: string }[] = [
+              { key: 'basic', label: isFr ? '1. Informations générales' : '1. General info' },
+              { key: 'location', label: isFr ? '2. Localisation' : '2. Location' },
+              { key: 'features', label: isFr ? '3. Caractéristiques' : '3. Features' },
+              { key: 'descriptions', label: isFr ? '4. Description' : '4. Description' },
+              { key: 'photos', label: isFr ? '5. Photos' : '5. Photos' },
+            ];
 
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                    {isFr ? 'Nom du bar' : 'Bar name'}
-                  </label>
-                  <input
-                    value={editForm.name}
-                    onChange={(e) => { setEditForm((f) => ({ ...f, name: e.target.value })); }}
-                    className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                    {isFr ? 'Adresse' : 'Address'}
-                  </label>
-                  <input
-                    value={editForm.address}
-                    onChange={(e) => { setEditForm((f) => ({ ...f, address: e.target.value })); setEditGeocoded(false); }}
-                    className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                      {isFr ? 'Ville' : 'City'}
-                    </label>
-                    <input
-                      value={editForm.city}
-                      onChange={(e) => { setEditForm((f) => ({ ...f, city: e.target.value })); setEditGeocoded(false); }}
-                      className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                      {isFr ? 'Code postal' : 'Postal code'}
-                    </label>
-                    <input
-                      value={editForm.postal_code}
-                      onChange={(e) => setEditForm((f) => ({ ...f, postal_code: e.target.value }))}
-                      className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                  </div>
-                </div>
-
-                {!editGeocoded && (
-                  <button
-                    type="button"
-                    onClick={geocodeEditAddress}
-                    disabled={editGeocoding}
-                    className="flex items-center gap-2 text-xs text-primary-700 dark:text-primary-400 border border-primary-300 rounded-lg px-3 py-2 hover:bg-primary-50 dark:hover:bg-primary-900/20 self-start"
-                  >
-                    {editGeocoding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
-                    {isFr ? 'Vérifier la nouvelle adresse' : 'Verify new address'}
+            return (
+              <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                {/* Accordion header */}
+                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/70 px-5 py-3">
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {isFr ? 'Modifier le bar' : 'Edit bar'}
+                  </h2>
+                  <button onClick={() => setEditing(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    <X className="w-4 h-4" />
                   </button>
-                )}
+                </div>
 
-                {editGeocoded && (
-                  <p className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    {isFr ? 'Adresse vérifiée' : 'Address verified'}
-                  </p>
-                )}
-              </div>
+                {/* Section tabs */}
+                <div className="flex overflow-x-auto border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  {sections.map((s) => (
+                    <button key={s.key} onClick={() => setEditSection(s.key)}
+                      className={`px-4 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
+                        editSection === s.key
+                          ? 'border-primary-600 text-primary-700 dark:text-primary-400'
+                          : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                      }`}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
 
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
-                  {isFr ? 'Annuler' : 'Cancel'}
-                </Button>
-                <Button size="sm" onClick={saveEdit} disabled={editSaving || !editGeocoded}>
-                  {editSaving && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-                  {isFr ? 'Enregistrer' : 'Save'}
-                </Button>
+                <div className="p-5 bg-white dark:bg-slate-900">
+                  {/* 1. Basic */}
+                  {editSection === 'basic' && (
+                    <div className="flex flex-col gap-3">
+                      <div><label className={labelCls}>{isFr ? 'Nom du bar *' : 'Bar name *'}</label>
+                        <input value={ef.name} onChange={(e) => setEf({ name: e.target.value })} className={inputCls} /></div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className={labelCls}>{isFr ? 'Téléphone' : 'Phone'}</label>
+                          <input value={ef.phone} onChange={(e) => setEf({ phone: e.target.value })} className={inputCls} placeholder="+1 514 555-0100" /></div>
+                        <div><label className={labelCls}>Site web</label>
+                          <input value={ef.website} onChange={(e) => setEf({ website: e.target.value })} className={inputCls} placeholder="https://..." /></div>
+                      </div>
+                      <div><label className={labelCls}>Instagram</label>
+                        <input value={ef.instagram} onChange={(e) => setEf({ instagram: e.target.value })} className={inputCls} placeholder="@monbar" /></div>
+                    </div>
+                  )}
+
+                  {/* 2. Location */}
+                  {editSection === 'location' && (
+                    <div className="flex flex-col gap-3">
+                      <div><label className={labelCls}>{isFr ? 'Adresse *' : 'Address *'}</label>
+                        <input value={ef.address}
+                          onChange={(e) => { setEf({ address: e.target.value }); setEditGeocoded(false); }}
+                          className={inputCls} /></div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className={labelCls}>{isFr ? 'Ville *' : 'City *'}</label>
+                          <input value={ef.city}
+                            onChange={(e) => { setEf({ city: e.target.value }); setEditGeocoded(false); }}
+                            className={inputCls} /></div>
+                        <div><label className={labelCls}>{isFr ? 'Province *' : 'Province *'}</label>
+                          <select value={ef.province} onChange={(e) => { setEf({ province: e.target.value }); setEditGeocoded(false); }}
+                            className={inputCls}>
+                            {PROVINCES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                          </select></div>
+                      </div>
+                      <div className="max-w-[160px]"><label className={labelCls}>{isFr ? 'Code postal' : 'Postal code'}</label>
+                        <input value={ef.postal_code} onChange={(e) => setEf({ postal_code: e.target.value })} className={inputCls} placeholder="H2X 1Y4" /></div>
+                      {!editGeocoded ? (
+                        <button type="button" onClick={geocodeEditAddress} disabled={editGeocoding}
+                          className="self-start flex items-center gap-2 text-xs border border-primary-300 text-primary-700 dark:text-primary-400 px-3 py-2 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20">
+                          {editGeocoding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                          {isFr ? 'Vérifier l\'adresse' : 'Verify address'}
+                        </button>
+                      ) : (
+                        <p className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          {isFr ? `Localisé : ${ef.latitude.toFixed(4)}, ${ef.longitude.toFixed(4)}` : `Located: ${ef.latitude.toFixed(4)}, ${ef.longitude.toFixed(4)}`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 3. Features */}
+                  {editSection === 'features' && (
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <p className={labelCls}>{isFr ? 'Ce que vous offrez' : 'What you offer'}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {([
+                            { field: 'has_sound' as const, label: '🔊 Son' },
+                            { field: 'has_projector' as const, label: '📺 Écran géant' },
+                            { field: 'has_outdoor' as const, label: '🌿 Terrasse' },
+                            { field: 'has_food' as const, label: '🍔 Nourriture' },
+                          ]).map(({ field, label }) => (
+                            <button key={field} type="button" onClick={() => setEf({ [field]: !ef[field] })}
+                              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                                ef[field] ? 'bg-primary-700 text-white border-primary-700' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:border-primary-400'
+                              }`}>
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={labelCls}>{isFr ? 'Nombre d\'écrans' : 'Screens'}</label>
+                          <input type="number" min={1} max={50} value={ef.num_screens}
+                            onChange={(e) => setEf({ num_screens: parseInt(e.target.value) || 1 })}
+                            className={`${inputCls} w-24`} />
+                        </div>
+                        <div>
+                          <label className={labelCls}>{isFr ? 'Capacité' : 'Capacity'}</label>
+                          <input type="number" min={10} max={5000} value={ef.capacity}
+                            onChange={(e) => setEf({ capacity: e.target.value })}
+                            className={inputCls} placeholder="150" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className={labelCls}>{isFr ? 'Ambiance' : 'Atmosphere'}</label>
+                        <select value={ef.atmosphere} onChange={(e) => setEf({ atmosphere: e.target.value })} className={inputCls}>
+                          <option value="">{isFr ? '— Choisir —' : '— Choose —'}</option>
+                          {ATMOSPHERES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 4. Descriptions */}
+                  {editSection === 'descriptions' && (
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <label className={labelCls}>{isFr ? 'Description en français' : 'French description'}</label>
+                        <textarea value={ef.description_fr} onChange={(e) => setEf({ description_fr: e.target.value })}
+                          rows={4} maxLength={1000}
+                          className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 w-full resize-none" />
+                        <p className="text-xs text-slate-400 text-right mt-0.5">{ef.description_fr.length}/1000</p>
+                      </div>
+                      <div>
+                        <label className={labelCls}>{isFr ? 'Description en anglais' : 'English description'}</label>
+                        <textarea value={ef.description_en} onChange={(e) => setEf({ description_en: e.target.value })}
+                          rows={4} maxLength={1000}
+                          className="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 w-full resize-none" />
+                        <p className="text-xs text-slate-400 text-right mt-0.5">{ef.description_en.length}/1000</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 5. Photos */}
+                  {editSection === 'photos' && (
+                    <PhotoGalleryEditor
+                      photos={ef.photo_urls}
+                      logo={ef.logo_url}
+                      onPhotosChange={(urls) => setEf({ photo_urls: urls })}
+                      onLogoChange={(url) => setEf({ logo_url: url })}
+                      locale={locale}
+                    />
+                  )}
+
+                  {/* Error */}
+                  {editError && (
+                    <p className="mt-3 text-xs text-red-500 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" /> {editError}
+                    </p>
+                  )}
+
+                  {/* Footer buttons */}
+                  <div className="flex gap-2 justify-end mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
+                      {isFr ? 'Annuler' : 'Cancel'}
+                    </Button>
+                    <Button size="sm" onClick={saveEdit} disabled={editSaving || !editGeocoded}>
+                      {editSaving && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                      {isFr ? 'Enregistrer les modifications' : 'Save changes'}
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Delete confirmation */}
           {confirmDelete && (

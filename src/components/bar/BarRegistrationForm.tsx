@@ -2,12 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { MapPin, Loader2, CheckCircle2, AlertCircle, ImagePlus, X } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { MapPin, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { MAPBOX_TOKEN } from '@/lib/mapbox/config';
+import { PhotoGalleryEditor } from '@/components/bar/PhotoGalleryEditor';
 
 interface FormData {
   name: string;
@@ -80,10 +80,6 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
   const [geocoded, setGeocoded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -238,115 +234,6 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
     }
   };
 
-  // Resize image and convert to WebP
-  const resizeImage = (file: File, maxW: number, maxH: number): Promise<Blob> =>
-    new Promise((resolve, reject) => {
-      const img = new Image();
-      const objectUrl = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        let { width, height } = img;
-        if (width > maxW || height > maxH) {
-          const ratio = Math.min(maxW / width, maxH / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d')!;
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob(
-          (blob) => blob ? resolve(blob) : reject(new Error('toBlob failed')),
-          'image/webp',
-          0.88,
-        );
-      };
-      img.onerror = reject;
-      img.src = objectUrl;
-    });
-
-  const uploadSingleFile = async (file: File, prefix: string): Promise<string | null> => {
-    try {
-      const blob = await resizeImage(file, 1600, 1200);
-      const supabase = createClient();
-      const path = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}.webp`;
-      const { data, error } = await supabase.storage
-        .from('bar-images')
-        .upload(path, blob, { contentType: 'image/webp', upsert: true });
-      if (error) return null;
-      const { data: { publicUrl } } = supabase.storage.from('bar-images').getPublicUrl(data.path);
-      return publicUrl;
-    } catch {
-      return null;
-    }
-  };
-
-  // Upload multiple bar photos (max 10, first becomes cover)
-  const handlePhotosSelected = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const MAX = 10;
-    const remaining = MAX - form.photo_urls.length;
-    if (remaining <= 0) return;
-
-    const toProcess = Array.from(files).slice(0, remaining);
-    setUploadingPhotos(true);
-    setUploadProgress(0);
-
-    const uploaded: string[] = [];
-    for (let i = 0; i < toProcess.length; i++) {
-      const url = await uploadSingleFile(toProcess[i], 'photo');
-      if (url) uploaded.push(url);
-      setUploadProgress(Math.round(((i + 1) / toProcess.length) * 100));
-    }
-
-    if (uploaded.length) {
-      setForm((f) => ({ ...f, photo_urls: [...f.photo_urls, ...uploaded] }));
-    } else {
-      setErrors((e) => ({ ...e, photos: isFr ? 'Erreur lors de l\'upload' : 'Upload failed' }));
-    }
-    setUploadingPhotos(false);
-    setUploadProgress(0);
-    // Reset input so the same files can be re-selected if needed
-    if (photoInputRef.current) photoInputRef.current.value = '';
-  };
-
-  const removePhoto = (index: number) => {
-    setForm((f) => ({ ...f, photo_urls: f.photo_urls.filter((_, i) => i !== index) }));
-  };
-
-  const movePhotoLeft = (index: number) => {
-    if (index === 0) return;
-    setForm((f) => {
-      const arr = [...f.photo_urls];
-      [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]];
-      return { ...f, photo_urls: arr };
-    });
-  };
-
-  const uploadLogoImage = async (file: File) => {
-    setUploadingLogo(true);
-    try {
-      const blob = await resizeImage(file, 400, 400);
-      const supabase = createClient();
-      const path = `logo-${Date.now()}.webp`;
-      const { data, error } = await supabase.storage
-        .from('bar-images')
-        .upload(path, blob, { contentType: 'image/webp', upsert: true });
-      if (error) {
-        setErrors((e) => ({ ...e, logo_url: isFr ? 'Erreur upload' : 'Upload error' }));
-      } else {
-        const { data: { publicUrl } } = supabase.storage.from('bar-images').getPublicUrl(data.path);
-        set('logo_url', publicUrl);
-      }
-    } catch {
-      setErrors((e) => ({ ...e, logo_url: isFr ? 'Erreur de traitement' : 'Processing error' }));
-    } finally {
-      setUploadingLogo(false);
-    }
-  };
 
   const ToggleChip = ({ field, label }: { field: keyof FormData; label: string }) => (
     <button
@@ -600,174 +487,13 @@ export function BarRegistrationForm({ locale }: BarRegistrationFormProps) {
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-700 pb-2">
           {isFr ? '5. Photos (optionnel)' : '5. Photos (optional)'}
         </h2>
-
-        {/* Multi-photo upload */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                {isFr ? 'Photos du bar' : 'Bar photos'}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {isFr
-                  ? 'Max 10 photos — la 1ère sera la photo de couverture. Cliquez ← pour réordonner.'
-                  : 'Max 10 photos — the 1st will be the cover photo. Click ← to reorder.'}
-              </p>
-            </div>
-            <span className="text-xs font-mono text-slate-400">{form.photo_urls.length}/10</span>
-          </div>
-
-          {/* Thumbnails grid */}
-          {form.photo_urls.length > 0 && (
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-              {form.photo_urls.map((url, i) => (
-                <div key={url} className="relative group aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                  <img src={url} alt={`photo-${i + 1}`} className="w-full h-full object-cover" />
-                  {/* Cover badge */}
-                  {i === 0 && (
-                    <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">
-                      {isFr ? 'Couverture' : 'Cover'}
-                    </span>
-                  )}
-                  {/* Actions overlay */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                    {i > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => movePhotoLeft(i)}
-                        title={isFr ? 'Déplacer en couverture' : 'Move to cover'}
-                        className="bg-white/90 text-slate-800 rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold hover:bg-white"
-                      >
-                        ←
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(i)}
-                      title={isFr ? 'Supprimer' : 'Remove'}
-                      className="bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center hover:bg-red-600"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {/* Add more slot */}
-              {form.photo_urls.length < 10 && (
-                <label className={`aspect-square rounded-xl border-2 border-dashed cursor-pointer flex flex-col items-center justify-center transition-colors ${
-                  uploadingPhotos
-                    ? 'border-primary-300 bg-primary-50 dark:bg-primary-900/20'
-                    : 'border-slate-300 dark:border-slate-600 hover:border-primary-400 bg-white dark:bg-slate-800'
-                }`}>
-                  {uploadingPhotos ? (
-                    <div className="flex flex-col items-center gap-1">
-                      <Loader2 className="w-5 h-5 animate-spin text-primary-700" />
-                      {uploadProgress > 0 && (
-                        <span className="text-xs text-primary-700 font-medium">{uploadProgress}%</span>
-                      )}
-                    </div>
-                  ) : (
-                    <ImagePlus className="w-5 h-5 text-slate-400" />
-                  )}
-                  <input
-                    ref={photoInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/heic,image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => handlePhotosSelected(e.target.files)}
-                  />
-                </label>
-              )}
-            </div>
-          )}
-
-          {/* Empty state — big drop zone */}
-          {form.photo_urls.length === 0 && (
-            <label className={`flex flex-col items-center justify-center w-full h-40 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
-              uploadingPhotos
-                ? 'border-primary-300 bg-primary-50 dark:bg-primary-900/20'
-                : 'border-slate-300 dark:border-slate-600 hover:border-primary-400 bg-white dark:bg-slate-800'
-            }`}>
-              {uploadingPhotos ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="w-7 h-7 animate-spin text-primary-700" />
-                  <span className="text-sm text-primary-700 font-medium">
-                    {uploadProgress > 0 ? `${uploadProgress}%` : (isFr ? 'Upload en cours…' : 'Uploading…')}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2 text-slate-400">
-                  <ImagePlus className="w-8 h-8" />
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                      {isFr ? 'Cliquer pour sélectionner des photos' : 'Click to select photos'}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {isFr
-                        ? 'JPG, PNG, HEIC — vous pouvez en sélectionner plusieurs à la fois'
-                        : 'JPG, PNG, HEIC — you can select multiple at once'}
-                    </p>
-                  </div>
-                </div>
-              )}
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/heic,image/*"
-                multiple
-                className="hidden"
-                onChange={(e) => handlePhotosSelected(e.target.files)}
-              />
-            </label>
-          )}
-
-          {errors.photos && <p className="text-xs text-red-600">{errors.photos}</p>}
-        </div>
-
-        {/* Logo */}
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            {isFr ? 'Logo du bar (optionnel)' : 'Bar logo (optional)'}
-          </label>
-          {form.logo_url ? (
-            <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-              <img src={form.logo_url} alt="logo" className="w-full h-full object-cover" />
-              <button
-                type="button"
-                onClick={() => set('logo_url', null)}
-                className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 hover:bg-black/70"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ) : (
-            <label className={`flex flex-col items-center justify-center w-20 h-20 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
-              uploadingLogo
-                ? 'border-primary-300 bg-primary-50 dark:bg-primary-900/20'
-                : 'border-slate-300 dark:border-slate-600 hover:border-primary-400 bg-white dark:bg-slate-800'
-            }`}>
-              {uploadingLogo ? (
-                <Loader2 className="w-4 h-4 animate-spin text-primary-700" />
-              ) : (
-                <ImagePlus className="w-5 h-5 text-slate-400" />
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) uploadLogoImage(file);
-                }}
-              />
-            </label>
-          )}
-          {errors.logo_url && (
-            <p className="text-xs text-red-600">{errors.logo_url}</p>
-          )}
-        </div>
+        <PhotoGalleryEditor
+          photos={form.photo_urls}
+          logo={form.logo_url}
+          onPhotosChange={(urls) => set('photo_urls', urls)}
+          onLogoChange={(url) => set('logo_url', url)}
+          locale={locale}
+        />
       </section>
 
       {/* Submit */}

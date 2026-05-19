@@ -2,14 +2,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 
+const PROVINCES = ['QC', 'ON', 'BC', 'AB', 'MB', 'SK', 'NS', 'NB', 'NL', 'PE', 'YT', 'NT', 'NU'] as const;
+
 const patchSchema = z.object({
+  // Basic info
   name: z.string().min(2).max(100).optional(),
+  phone: z.string().max(30).optional().nullable(),
+  website: z.string().max(200).optional().nullable(),
+  instagram: z.string().max(60).optional().nullable(),
+  // Location
   address: z.string().min(5).max(200).optional(),
   city: z.string().min(2).max(50).optional(),
-  province: z.enum(['QC', 'ON', 'BC', 'AB', 'MB', 'SK', 'NS', 'NB', 'NL', 'PE', 'YT', 'NT', 'NU']).optional(),
+  province: z.enum(PROVINCES).optional(),
   postal_code: z.string().max(10).optional().nullable(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
+  // Features
+  has_sound: z.boolean().optional(),
+  has_projector: z.boolean().optional(),
+  has_outdoor: z.boolean().optional(),
+  has_food: z.boolean().optional(),
+  num_screens: z.number().int().min(1).max(50).optional(),
+  capacity: z.number().int().min(1).max(10000).optional().nullable(),
+  atmosphere: z.enum(['lively', 'chill', 'sports_bar', 'pub']).optional().nullable(),
+  // Descriptions
+  description_fr: z.string().max(1000).optional().nullable(),
+  description_en: z.string().max(1000).optional().nullable(),
+  // Photos
   cover_image_url: z.string().max(500).optional().nullable(),
   logo_url: z.string().max(500).optional().nullable(),
   gallery_images: z.array(z.string().max(500)).max(10).optional(),
@@ -38,12 +57,20 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: { message: 'Validation error' } }, { status: 422 });
+    const msg = parsed.error.flatten().fieldErrors;
+    const first = Object.entries(msg).find(([, v]) => v?.length)?.[1]?.[0];
+    return NextResponse.json({ error: { message: first ?? 'Validation error' } }, { status: 422 });
   }
+
+  // Sanitise empty strings to null for nullable text fields
+  const data = { ...parsed.data };
+  (['phone', 'website', 'instagram', 'description_fr', 'description_en'] as const).forEach((k) => {
+    if (data[k] === '') (data as Record<string, unknown>)[k] = null;
+  });
 
   const { data: updated, error } = await supabase
     .from('bars')
-    .update(parsed.data)
+    .update(data)
     .eq('id', params.id)
     .select()
     .single();
