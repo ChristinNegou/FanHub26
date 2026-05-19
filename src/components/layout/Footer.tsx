@@ -39,6 +39,8 @@ export function Footer({ locale }: FooterProps) {
             <h4 className="text-white font-medium mb-3">{isFr ? 'À propos' : 'About'}</h4>
             <ul className="space-y-2 text-sm">
               <li><Link href={`/${locale}/about`} className="hover:text-white transition-colors">{isFr ? 'À propos' : 'About'}</Link></li>
+              <li><Link href={`/${locale}/community`} className="hover:text-white transition-colors">{isFr ? 'Communauté' : 'Community'}</Link></li>
+              <li><Link href={`/${locale}/contact`} className="hover:text-white transition-colors">{isFr ? 'Nous contacter' : 'Contact'}</Link></li>
             </ul>
           </div>
         </div>

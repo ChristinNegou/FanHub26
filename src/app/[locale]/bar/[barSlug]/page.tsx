@@ -63,6 +63,9 @@ export default async function BarPublicPage({ params }: PageProps) {
 
   if (!bar) notFound();
 
+  // Fire-and-forget view increment (non-blocking)
+  supabase.rpc('increment_bar_view', { bar_id: bar.id }).then(() => {});
+
   const { data: reviews } = await supabase
     .from('bar_reviews')
     .select('rating, comment, atmosphere_rating, sound_quality_rating, created_at')

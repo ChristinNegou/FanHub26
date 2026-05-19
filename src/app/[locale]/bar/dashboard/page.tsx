@@ -76,6 +76,7 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
   const [barsLoading, setBarsLoading] = useState(true);
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [selectedMatchIds, setSelectedMatchIds] = useState<Set<string>>(new Set());
+  const [matchSettings, setMatchSettings] = useState<Record<string, { sound_on: boolean; special_offer: string }>>({});
   const [savingMatches, setSavingMatches] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
@@ -134,10 +135,17 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
 
     Promise.all([
       fetch('/api/matches').then((r) => r.json()),
-      supabase.from('bar_matches').select('match_id').eq('bar_id', bar.id),
+      supabase.from('bar_matches').select('match_id, sound_on, special_offer').eq('bar_id', bar.id),
     ]).then(([matchData, { data: barMatchData }]) => {
       setMatches(matchData.matches ?? []);
-      setSelectedMatchIds(new Set((barMatchData ?? []).map((bm: any) => bm.match_id)));
+      const ids = new Set<string>();
+      const settings: Record<string, { sound_on: boolean; special_offer: string }> = {};
+      for (const bm of barMatchData ?? []) {
+        ids.add(bm.match_id);
+        settings[bm.match_id] = { sound_on: bm.sound_on ?? true, special_offer: bm.special_offer ?? '' };
+      }
+      setSelectedMatchIds(ids);
+      setMatchSettings(settings);
     });
   }, [bar?.id]);
 
@@ -281,9 +289,22 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
   const toggleMatch = (matchId: string) => {
     setSelectedMatchIds((prev) => {
       const next = new Set(prev);
-      next.has(matchId) ? next.delete(matchId) : next.add(matchId);
+      if (next.has(matchId)) {
+        next.delete(matchId);
+      } else {
+        next.add(matchId);
+        setMatchSettings((s) => ({
+          ...s,
+          [matchId]: s[matchId] ?? { sound_on: bar?.has_sound ?? true, special_offer: '' },
+        }));
+      }
       return next;
     });
+    setSaveSuccess(false);
+  };
+
+  const updateMatchSetting = (matchId: string, field: 'sound_on' | 'special_offer', value: boolean | string) => {
+    setMatchSettings((s) => ({ ...s, [matchId]: { ...s[matchId], [field]: value } }));
     setSaveSuccess(false);
   };
 
@@ -301,8 +322,22 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
 
     if (toAdd.length) {
       await supabase.from('bar_matches').insert(
-        toAdd.map((match_id) => ({ bar_id: bar.id, match_id, sound_on: bar.has_sound })),
+        toAdd.map((match_id) => ({
+          bar_id: bar.id,
+          match_id,
+          sound_on: matchSettings[match_id]?.sound_on ?? bar.has_sound,
+          special_offer: matchSettings[match_id]?.special_offer || null,
+        })),
       );
+    }
+    // Update settings for already-existing matches
+    for (const match_id of Array.from(currentIds).filter((id) => selectedMatchIds.has(id))) {
+      const s = matchSettings[match_id];
+      if (s) {
+        await supabase.from('bar_matches')
+          .update({ sound_on: s.sound_on, special_offer: s.special_offer || null })
+          .eq('bar_id', bar.id).eq('match_id', match_id);
+      }
     }
     if (toRemove.length) {
       await supabase.from('bar_matches').delete().eq('bar_id', bar.id).in('match_id', toRemove);
@@ -715,19 +750,17 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
                 color: 'text-amber-500',
               },
               {
-                icon: Users,
-                label: isFr ? 'Avis reçus' : 'Reviews received',
-                value: reviews.length.toString(),
-                sub: reviews.length > 0
-                  ? `${isFr ? 'Dernier : ' : 'Latest: '}${new Date(reviews[0].created_at).toLocaleDateString(isFr ? 'fr-CA' : 'en-CA', { month: 'short', day: 'numeric' })}`
-                  : '—',
+                icon: BarChart3,
+                label: isFr ? 'Vues de la page' : 'Page views',
+                value: (bar.view_count ?? 0).toLocaleString(),
+                sub: isFr ? 'visites au total' : 'total visits',
                 color: 'text-primary-600',
               },
               {
-                icon: BarChart3,
+                icon: Users,
                 label: isFr ? 'Matchs diffusés' : 'Matches showing',
                 value: selectedMatchIds.size.toString(),
-                sub: isFr ? 'matchs sélectionnés' : 'matches selected',
+                sub: isFr ? 'matchs sélectionnés' : 'selected',
                 color: 'text-green-600',
               },
             ];
@@ -935,30 +968,68 @@ export default function BarDashboardPage({ params: { locale } }: { params: { loc
                     {dayMatches.map((m) => {
                       const { teams, time } = matchLabel(m);
                       const selected = selectedMatchIds.has(m.id);
+                      const settings = matchSettings[m.id] ?? { sound_on: bar?.has_sound ?? true, special_offer: '' };
                       return (
-                        <button
-                          key={m.id}
-                          onClick={() => toggleMatch(m.id)}
-                          className={`flex items-center justify-between rounded-xl px-4 py-3 text-left border transition-colors ${
-                            selected
-                              ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-300 dark:border-primary-700'
-                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                          }`}
-                        >
-                          <div>
-                            <p className={`text-sm font-medium ${selected ? 'text-primary-700 dark:text-primary-300' : 'text-slate-900 dark:text-white'}`}>
-                              {teams}
-                            </p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                              {time} ET · {m.venue_city}
-                            </p>
-                          </div>
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                            selected ? 'bg-primary-700 border-primary-700' : 'border-slate-300 dark:border-slate-600'
-                          }`}>
-                            {selected && <CheckCircle2 className="w-3 h-3 text-white" />}
-                          </div>
-                        </button>
+                        <div key={m.id} className={`rounded-xl border transition-colors ${
+                          selected
+                            ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-300 dark:border-primary-700'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                        }`}>
+                          {/* Match header row */}
+                          <button
+                            type="button"
+                            onClick={() => toggleMatch(m.id)}
+                            className="w-full flex items-center justify-between px-4 py-3 text-left"
+                          >
+                            <div>
+                              <p className={`text-sm font-medium ${selected ? 'text-primary-700 dark:text-primary-300' : 'text-slate-900 dark:text-white'}`}>
+                                {teams}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                {time} ET · {m.venue_city}
+                              </p>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                              selected ? 'bg-primary-700 border-primary-700' : 'border-slate-300 dark:border-slate-600'
+                            }`}>
+                              {selected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                            </div>
+                          </button>
+
+                          {/* Settings panel (only when selected) */}
+                          {selected && (
+                            <div className="px-4 pb-3 flex flex-col gap-2 border-t border-primary-200 dark:border-primary-800 pt-2">
+                              {/* Sound toggle */}
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <button
+                                  type="button"
+                                  onClick={() => updateMatchSetting(m.id, 'sound_on', !settings.sound_on)}
+                                  className={`w-9 h-5 rounded-full transition-colors relative ${settings.sound_on ? 'bg-primary-700' : 'bg-slate-300 dark:bg-slate-600'}`}
+                                >
+                                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.sound_on ? 'translate-x-4' : 'translate-x-0'}`} />
+                                </button>
+                                <span className="text-xs text-slate-600 dark:text-slate-300">
+                                  {isFr ? '🔊 Son activé' : '🔊 Sound on'}
+                                </span>
+                              </label>
+
+                              {/* Special offer */}
+                              <div className="flex flex-col gap-1">
+                                <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                  {isFr ? 'Offre spéciale (optionnel)' : 'Special offer (optional)'}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={settings.special_offer}
+                                  onChange={(e) => updateMatchSetting(m.id, 'special_offer', e.target.value)}
+                                  maxLength={100}
+                                  placeholder={isFr ? 'Ex: Pichets à 15$, happy hour...' : 'E.g. Pitchers $15, happy hour...'}
+                                  className="text-xs rounded-lg border border-primary-200 dark:border-primary-800 bg-white dark:bg-slate-900 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary-500 text-slate-800 dark:text-slate-200 placeholder-slate-400"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

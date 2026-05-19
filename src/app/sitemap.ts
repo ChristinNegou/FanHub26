@@ -6,7 +6,7 @@ const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://fan-hub26.vercel.a
 const locales = ['fr', 'en'];
 
 function staticRoutes(): MetadataRoute.Sitemap {
-  const paths = ['', '/watch', '/calendar', '/guide', '/fanzones', '/community'];
+  const paths = ['', '/watch', '/calendar', '/guide', '/fanzones', '/community', '/about', '/contact'];
   const entries: MetadataRoute.Sitemap = [];
 
   for (const locale of locales) {
